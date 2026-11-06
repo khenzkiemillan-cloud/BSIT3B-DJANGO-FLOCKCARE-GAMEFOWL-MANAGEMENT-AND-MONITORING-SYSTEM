@@ -1,0 +1,340 @@
+{% extends "theme/base.html" %}
+{% block content %}
+
+  <div class="dh-hero dh-welcome-row">
+    <div class="dh-hero-inner d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="dh-hero-pretitle">Flock overview</span>
+          <span class="dh-hero-date"><i class="far fa-calendar me-1"></i>{% now "l, F j" %}</span>
+        </div>
+        <h2 class="dh-hero-title">Welcome back, {{ user.get_full_name|default:user.username }}</h2>
+        <p class="dh-hero-sub mb-0">
+          Track your gamefowl flock, health schedule and fight record at a glance.
+        </p>
+        <div class="dh-hero-stats">
+          <span class="dh-hero-stat"><span class="dh-status-dot"></span><strong>{{ active_birds }}</strong> active</span>
+          <span class="dh-hero-stat is-warning"><span class="dh-status-dot"></span><strong>{{ conditioning_birds }}</strong> conditioning</span>
+          {% if overdue_count %}
+          <span class="dh-hero-stat is-danger"><span class="dh-status-dot"></span><strong>{{ overdue_count }}</strong> overdue task{{ overdue_count|pluralize }}</span>
+          {% else %}
+          <span class="dh-hero-stat"><span class="dh-status-dot"></span>Health schedule on track</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="btn-list">
+        <a href="{% url 'info:info_list' %}" class="btn btn-accent">
+          <i class="fas fa-dove me-2"></i>Manage flock
+        </a>
+        <a href="{% url 'info:export_flock_csv' %}" class="btn btn-outline-light">
+          <i class="fas fa-file-csv me-2"></i>Export CSV
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row row-cards mt-1">
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card stat-card-primary text-white">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <div class="h2 mb-1">{{ total_birds }}</div>
+              <div class="tracking-wide text-white-50">Total birds</div>
+              <div class="dh-stat-meta">
+                <i class="fas fa-layer-group"></i>
+                {{ breed_count }} breed{{ breed_count|pluralize }}
+              </div>
+            </div>
+            <span class="stat-card-icon"><i class="fas fa-dove"></i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card stat-card-success text-white">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <div class="h2 mb-1">{{ active_birds }}</div>
+              <div class="tracking-wide text-white-50">Active birds</div>
+              <div class="dh-stat-meta">
+                <i class="fas fa-arrow-trend-up"></i>
+                {{ active_pct }}% of the flock
+              </div>
+            </div>
+            <span class="stat-card-icon"><i class="fas fa-heart-pulse"></i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card stat-card-warning text-white">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <div class="h2 mb-1">{{ conditioning_birds }}</div>
+              <div class="tracking-wide text-white-50">In conditioning</div>
+              <div class="dh-stat-meta">
+                <i class="fas fa-dumbbell"></i>
+                {{ conditioning_pct }}% of the flock
+              </div>
+            </div>
+            <span class="stat-card-icon"><i class="fas fa-dumbbell"></i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card stat-card-info text-white">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <div class="h2 mb-1">{{ win_rate }}%</div>
+              <div class="tracking-wide text-white-50">Win rate</div>
+              <div class="dh-stat-meta">
+                <i class="fas fa-trophy"></i>
+                {{ total_wins }}W – {{ total_losses }}L
+              </div>
+            </div>
+            <span class="stat-card-icon"><i class="fas fa-trophy"></i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row row-cards mt-1">
+    <div class="col-lg-7">
+      <div class="card h-100">
+        <div class="card-header d-flex align-items-center">
+          <h3 class="card-title mb-0">Recent flock members</h3>
+          <span class="badge bg-primary-lt text-primary ms-auto">{{ total_birds }} total</span>
+          <a href="{% url 'info:info_list' %}" class="btn btn-sm btn-outline-primary">
+            View all
+          </a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-vcenter card-table dh-stack-table">
+            <thead>
+              <tr>
+                <th>Tag</th>
+                <th>Breed</th>
+                <th>Gender</th>
+                <th>Status</th>
+                <th class="text-end">Record</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for bird in recent_members %}
+              <tr>
+                <td class="fw-semibold" data-label="Tag">
+                  <span class="dh-table-tag">
+                    <span class="dh-table-avatar"><i class="fas fa-dove"></i></span>
+                    <span class="dh-tag">{{ bird.tag_number }}</span>
+                  </span>
+                </td>
+                <td class="text-muted" data-label="Breed">{{ bird.breed.name|default:"—" }}</td>
+                <td class="text-muted" data-label="Gender">{{ bird.gender }}</td>
+                <td data-label="Status">
+                  {% if bird.status == 'Active' %}
+                  <span class="dh-status is-active"><span class="dh-status-dot"></span>{{ bird.status }}</span>
+                  {% elif bird.status == 'Conditioning' %}
+                  <span class="dh-status is-warning"><span class="dh-status-dot"></span>{{ bird.status }}</span>
+                  {% elif bird.status == 'Retired' %}
+                  <span class="dh-status is-muted"><span class="dh-status-dot"></span>{{ bird.status }}</span>
+                  {% else %}
+                  <span class="dh-status is-info"><span class="dh-status-dot"></span>{{ bird.status }}</span>
+                  {% endif %}
+                </td>
+                <td class="text-end" data-label="Record">
+                  <span class="dh-record">
+                    <span class="dh-record-wins">{{ bird.wins }}W</span>
+                    <span class="dh-record-sep">–</span>
+                    <span class="dh-record-losses">{{ bird.losses }}L</span>
+                  </span>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5">
+                  <div class="empty py-4">
+                    <div class="empty-icon"><i class="fas fa-dove"></i></div>
+                    <p class="empty-title">No flock members yet</p>
+                    <p class="empty-subtitle">Add your first bird to start tracking your flock.</p>
+                    <div class="empty-action">
+                      <a href="{% url 'info:info_list' %}" class="btn btn-primary">
+                        <i class="fas fa-plus-circle me-2"></i>Add flock member
+                      </a>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card h-100">
+        <div class="card-header d-flex align-items-center">
+          <h3 class="card-title mb-0">Health reminders</h3>
+          {% if overdue_count %}
+          <span class="badge bg-danger-lt text-danger ms-auto">{{ overdue_count }} overdue</span>
+          {% elif upcoming_count %}
+          <span class="badge bg-primary-lt text-primary ms-auto">{{ upcoming_count }} upcoming</span>
+          {% endif %}
+        </div>
+        <div class="list-group list-group-flush">
+          {% for record in overdue_records %}
+          <div class="list-group-item dh-reminder dh-reminder-overdue d-flex align-items-start gap-3">
+            <span class="dh-reminder-icon is-danger" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></span>
+            <div class="flex-grow-1 min-w-0">
+              <div class="fw-semibold text-truncate">{{ record.title }}</div>
+              <div class="text-muted small">
+                {{ record.bird.tag_number }} · {{ record.record_type }} · due {{ record.next_due_date|date:"M j, Y" }}
+              </div>
+            </div>
+            <span class="badge bg-danger-lt text-danger">Overdue</span>
+          </div>
+          {% endfor %}
+          {% for record in upcoming_records %}
+          <div class="list-group-item dh-reminder d-flex align-items-start gap-3">
+            <span class="dh-reminder-icon is-primary" aria-hidden="true"><i class="fas fa-calendar-day"></i></span>
+            <div class="flex-grow-1 min-w-0">
+              <div class="fw-semibold text-truncate">{{ record.title }}</div>
+              <div class="text-muted small">
+                {{ record.bird.tag_number }} · {{ record.record_type }} · due {{ record.next_due_date|date:"M j, Y" }}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+          {% if not overdue_records and not upcoming_records %}
+          <div class="list-group-item">
+            <div class="empty py-4">
+              <div class="empty-icon"><i class="fas fa-calendar-check"></i></div>
+              <p class="empty-title">No upcoming health tasks</p>
+              <p class="empty-subtitle">Vaccinations and treatments due in the next 30 days will appear here.</p>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row row-cards mt-1">
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header">
+          <h3 class="card-title mb-0">Flock composition</h3>
+        </div>
+        <div class="card-body">
+          <div class="dh-composition">
+            <div class="dh-donut"
+                 role="img"
+                 aria-label="Flock status breakdown"
+                 style="--p-active: {{ active_pct }}; --p-conditioning: {{ conditioning_pct }}; --p-retired: {{ retired_pct }};">
+              <div class="dh-donut-center">
+                <strong>{{ total_birds }}</strong>
+                <span>birds</span>
+              </div>
+            </div>
+            <div class="dh-legend">
+              <div class="dh-legend-item">
+                <span class="dh-legend-swatch" style="background:#22c55e;"></span>
+                <span class="dh-legend-label">Active</span>
+                <span class="dh-legend-value">{{ active_birds }}</span>
+              </div>
+              <div class="dh-legend-item">
+                <span class="dh-legend-swatch" style="background:#f59e0b;"></span>
+                <span class="dh-legend-label">Conditioning</span>
+                <span class="dh-legend-value">{{ conditioning_birds }}</span>
+              </div>
+              <div class="dh-legend-item">
+                <span class="dh-legend-swatch" style="background:#6366f1;"></span>
+                <span class="dh-legend-label">Retired</span>
+                <span class="dh-legend-value">{{ retired_birds }}</span>
+              </div>
+              <div class="dh-legend-item">
+                <span class="dh-legend-swatch" style="background:var(--tblr-bg-surface-tertiary);border:1px solid var(--tblr-border-color);"></span>
+                <span class="dh-legend-label">Breeding / other</span>
+                <span class="dh-legend-value">{{ other_birds }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header">
+          <h3 class="card-title mb-0">Fight record</h3>
+          <span class="badge bg-secondary-lt text-secondary ms-auto">{{ total_fights }} fight{{ total_fights|pluralize }}</span>
+        </div>
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-4 flex-wrap">
+            <div class="dh-win-ring" style="--value: {{ win_rate }};" role="img"
+                 aria-label="{{ win_rate }}% win rate">
+              <span>{{ win_rate }}%</span>
+            </div>
+            <div class="flex-grow-1">
+              <div class="dh-record-row">
+                <span class="text-muted">Wins</span>
+                <span class="fw-semibold text-success">{{ total_wins }}</span>
+              </div>
+              <div class="dh-record-row">
+                <span class="text-muted">Losses</span>
+                <span class="fw-semibold text-danger">{{ total_losses }}</span>
+              </div>
+              <div class="dh-record-row">
+                <span class="text-muted">Win rate</span>
+                <span class="fw-semibold">{{ win_rate }}%</span>
+              </div>
+            </div>
+          </div>
+          <div class="progress mt-3" style="height: 8px;" role="progressbar"
+               aria-label="Flock win rate" aria-valuenow="{{ win_rate }}"
+               aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar bg-success" style="width: {{ win_rate }}%;"></div>
+          </div>
+          <div class="text-muted small mt-2">Across {{ total_birds }} bird{{ total_birds|pluralize }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header">
+          <h3 class="card-title mb-0">Quick actions</h3>
+        </div>
+        <div class="card-body">
+          <div class="dh-quick-actions">
+            <a href="{% url 'info:info_list' %}" class="dh-quick-action">
+              <i class="fas fa-dove"></i>
+              <span>Manage flock</span>
+            </a>
+            <a href="{% url 'info:export_flock_csv' %}" class="dh-quick-action">
+              <i class="fas fa-file-csv"></i>
+              <span>Export CSV</span>
+            </a>
+            {% if user.is_superuser %}
+            <a href="{% url 'users:user_list' %}" class="dh-quick-action">
+              <i class="fas fa-users"></i>
+              <span>Manage users</span>
+            </a>
+            {% endif %}
+            <a href="{% url 'dashboard' %}" class="dh-quick-action">
+              <i class="fas fa-arrows-rotate"></i>
+              <span>Refresh data</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+{% endblock %}

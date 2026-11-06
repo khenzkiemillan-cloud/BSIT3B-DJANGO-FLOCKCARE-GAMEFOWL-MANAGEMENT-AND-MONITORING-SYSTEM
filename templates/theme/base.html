@@ -1,0 +1,111 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+    <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
+    <meta name="theme-color" content="#12142c"/>
+    <title>{% block title %}FlockCare{% endblock %} | ProjectV3</title>
+    <link href="{% static 'css/tabler.css' %}" rel="stylesheet"/>
+    <link href="{% static 'css/tabler-flags.css' %}" rel="stylesheet"/>
+    <link href="{% static 'css/tabler-socials.css' %}" rel="stylesheet"/>
+    <link href="{% static 'css/tabler-payments.css' %}" rel="stylesheet"/>
+    <link href="{% static 'css/tabler-vendors.css' %}" rel="stylesheet"/>
+    <link href="{% static 'css/tabler-marketing.css' %}" rel="stylesheet"/>
+    <link href="{% static 'css/tabler-themes.css' %}" rel="stylesheet"/>
+    <link href="{% static 'css/app-theme.css' %}" rel="stylesheet"/>
+    <link href="{% static 'vendor/inter/inter.css' %}" rel="stylesheet"/>
+    <link href="{% static 'vendor/fontawesome/css/all.min.css' %}" rel="stylesheet"/>
+  </head>
+
+  <body>
+    <a class="dh-skip-link" href="#main-content">Skip to content</a>
+    <div class="dh-page-progress" id="dhPageProgress" aria-hidden="true"></div>
+
+    <div class="page">
+
+        {% if request.user.is_authenticated %}
+            {% include 'theme/sidebar.html' %}
+        {% else %}
+            {% include 'theme/public_sidebar.html' %}
+        {% endif %}
+
+        <div class="page-wrapper">
+            <div class="page-body">
+                <div class="container-xl">
+                    <turbo-frame id="main-content" class="d-block" tabindex="-1" data-turbo-action="advance" data-current-url="{{ request.get_full_path }}">
+                        {% block content %}
+                        {% endblock %}
+                    </turbo-frame>
+                </div>
+            </div>
+            {% include 'theme/footer.html' %}
+        </div>
+    </div>
+
+    {% include 'theme/settings.html' %}
+
+    <script src="{% static 'js/tabler-theme.js' %}"></script>
+    <script src="{% static 'libs/@hotwired/turbo/dist/turbo.es2017-umd.js' %}"></script>
+    <script src="{% static 'js/tabler.js' %}"></script>
+    <script>
+      // Tabler bundles Bootstrap and exposes it as `tabler.bootstrap`.
+      // Inline page scripts use the familiar global `bootstrap` object.
+      if (typeof window.bootstrap === 'undefined' && window.tabler && window.tabler.bootstrap) {
+        window.bootstrap = window.tabler.bootstrap;
+      }
+    </script>
+    {% block extra_js %}{% endblock %}
+
+    <script>
+      const mainContentFrame = document.getElementById("main-content");
+      const pageProgress = document.getElementById("dhPageProgress");
+
+      mainContentFrame.addEventListener("turbo:before-fetch-request", function (event) {
+        mainContentFrame.dataset.currentUrl = event.detail.url.href;
+        pageProgress.classList.add("is-loading");
+      });
+
+      ["turbo:frame-render", "turbo:frame-load", "turbo:fetch-request-error"].forEach(function (eventName) {
+        mainContentFrame.addEventListener(eventName, function () {
+          pageProgress.classList.remove("is-loading");
+        });
+      });
+
+      window.refreshMainContent = function () {
+        const frame = document.getElementById("main-content");
+        const url = frame.dataset.currentUrl;
+        if (frame.getAttribute("src") === url) {
+          frame.reload();
+        } else {
+          frame.src = url;
+        }
+      };
+
+      function updateActiveSidebarLink() {
+        document.querySelectorAll(".dh-sidebar .nav-link").forEach(function (link) {
+          const linkPath = new URL(link.href, window.location.href).pathname;
+          const isActive = window.location.pathname === linkPath ||
+            (linkPath !== "/" && window.location.pathname.startsWith(linkPath));
+          link.classList.toggle("active", isActive);
+        });
+      }
+
+      // Close the mobile navigation after a menu item is selected so the
+      // destination page is immediately visible on small screens.
+      document.querySelectorAll(".dh-sidebar a").forEach(function (link) {
+        link.addEventListener("click", function () {
+          const collapseEl = link.closest(".navbar-collapse");
+          if (collapseEl && collapseEl.classList.contains("show") && window.bootstrap) {
+            bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false }).hide();
+          }
+        });
+      });
+
+      mainContentFrame.addEventListener("turbo:frame-render", updateActiveSidebarLink);
+      window.addEventListener("popstate", updateActiveSidebarLink);
+      updateActiveSidebarLink();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,960 @@
+{% extends "theme/base.html" %}
+{% block content %}
+
+  <div class="page-header d-print-none mb-4" aria-label="Page header">
+    <div class="row align-items-center">
+      <div class="col">
+        <nav aria-label="Breadcrumb">
+          <ol class="dh-breadcrumb">
+            <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
+            <li class="is-current">Flock</li>
+          </ol>
+        </nav>
+        <div class="page-pretitle">Flock management</div>
+        <div class="d-flex align-items-center gap-3 flex-wrap d-none d-md-flex">
+          <h2 class="page-title mb-0">Flock members</h2>
+        </div>
+        <h2 class="page-title mb-0 d-md-none">Flock members</h2>
+        <p class="dh-page-subtitle">
+          Track tag numbers, breeding, conditioning, and fight records for every bird in your flock.
+        </p>
+      </div>
+      <div class="col-12 col-md-auto">
+        <div class="btn-list">
+          <a href="{% url 'info:export_flock_csv' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-file-csv me-2"></i>Export CSV
+          </a>
+          <button type="button"
+                  class="btn btn-primary"
+                  data-bs-toggle="modal"
+                  data-bs-target="#memberModal"
+                  data-mode="create">
+            <i class="fas fa-plus-circle me-2"></i>Add flock member
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dh-mini-stats">
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-primary"><i class="fas fa-dove"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Total birds</span>
+        <span class="dh-mini-stat-value">{{ counts.total }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-success"><i class="fas fa-heart-pulse"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Active</span>
+        <span class="dh-mini-stat-value">{{ counts.active }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-warning"><i class="fas fa-dumbbell"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Conditioning</span>
+        <span class="dh-mini-stat-value">{{ counts.conditioning }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-info"><i class="fas fa-egg"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Breeding</span>
+        <span class="dh-mini-stat-value">{{ counts.breeding }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dh-toolbar">
+    <form method="GET" class="dh-search-form">
+      <label class="visually-hidden" for="flockSearch">Search flock members</label>
+      <div class="input-group">
+        <span class="input-group-text"><i class="fas fa-search"></i></span>
+        <input type="text"
+               id="flockSearch"
+               name="q"
+               value="{{ query }}"
+               class="form-control"
+               placeholder="Search by tag, breed, gender, status, sire or dam...">
+        {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+        {% if query or status %}
+        <a href="{% url 'info:info_list' %}" class="btn btn-outline-secondary">Clear</a>
+        {% endif %}
+        <button type="submit" class="btn btn-primary">Search</button>
+      </div>
+    </form>
+
+    <div class="dh-filter-chips" role="group" aria-label="Filter by status">
+      <a href="?{% if query %}q={{ query|urlencode }}{% endif %}"
+         class="dh-chip {% if not status %}is-active{% endif %}">
+        All <span class="dh-chip-count">{{ counts.total }}</span>
+      </a>
+      <a href="?status=Active{% if query %}&q={{ query|urlencode }}{% endif %}"
+         class="dh-chip {% if status == 'Active' %}is-active{% endif %}">
+        Active <span class="dh-chip-count">{{ counts.active }}</span>
+      </a>
+      <a href="?status=Conditioning{% if query %}&q={{ query|urlencode }}{% endif %}"
+         class="dh-chip {% if status == 'Conditioning' %}is-active{% endif %}">
+        Conditioning <span class="dh-chip-count">{{ counts.conditioning }}</span>
+      </a>
+      <a href="?status=Retired{% if query %}&q={{ query|urlencode }}{% endif %}"
+         class="dh-chip {% if status == 'Retired' %}is-active{% endif %}">
+        Retired <span class="dh-chip-count">{{ counts.retired }}</span>
+      </a>
+      <a href="?status=breeding{% if query %}&q={{ query|urlencode }}{% endif %}"
+         class="dh-chip {% if status == 'breeding' %}is-active{% endif %}">
+        Breeding <span class="dh-chip-count">{{ counts.breeding }}</span>
+      </a>
+    </div>
+  </div>
+
+  <div id="flockAlert" class="alert d-none alert-dismissible fade" role="alert"></div>
+
+  <div class="card">
+    <div class="card-header d-flex align-items-center">
+      <div class="card-title mb-0">
+        {% if status or query %}
+          Filtered birds
+        {% else %}
+          All birds
+        {% endif %}
+        {% if query %}
+        <span class="text-muted fw-normal">— results for "{{ query }}"</span>
+        {% endif %}
+      </div>
+      <span class="badge bg-primary-lt text-primary ms-auto">{{ members.paginator.count }} result{{ members.paginator.count|pluralize }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-vcenter table-hover card-table text-nowrap dh-stack-table" id="flockTable">
+        <thead>
+          <tr>
+            <th>Tag</th>
+            <th>Breed</th>
+            <th>Gender</th>
+            <th>Status</th>
+            <th>Birth date</th>
+            <th class="text-end">Weight</th>
+            <th class="text-end">Record</th>
+            <th class="w-1">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="flockTableBody">
+          {% for bird in members %}
+          <tr data-row-id="{{ bird.id }}">
+            <td class="fw-semibold" data-label="Tag">
+              <span class="dh-table-tag">
+                <span class="dh-table-avatar"><i class="fas fa-dove"></i></span>
+                <span class="dh-tag">{{ bird.tag_number }}</span>
+              </span>
+            </td>
+            <td class="text-muted" data-label="Breed">{{ bird.breed.name|default:"—" }}</td>
+            <td class="text-muted" data-label="Gender">{{ bird.gender }}</td>
+            <td data-label="Status">
+              {% if bird.status == 'Active' %}
+              <span class="dh-status is-active"><span class="dh-status-dot"></span>{{ bird.status }}</span>
+              {% elif bird.status == 'Conditioning' %}
+              <span class="dh-status is-warning"><span class="dh-status-dot"></span>{{ bird.status }}</span>
+              {% elif bird.status == 'Retired' %}
+              <span class="dh-status is-muted"><span class="dh-status-dot"></span>{{ bird.status }}</span>
+              {% else %}
+              <span class="dh-status is-info"><span class="dh-status-dot"></span>{{ bird.status }}</span>
+              {% endif %}
+            </td>
+            <td class="text-muted" data-label="Birth date">{{ bird.birth_date|date:"M j, Y"|default:"—" }}</td>
+            <td class="text-end text-muted" data-label="Weight">{{ bird.weight_grams|default:"—" }}{% if bird.weight_grams %} g{% endif %}</td>
+            <td class="text-end" data-label="Record">
+              <span class="dh-record">
+                <span class="dh-record-wins">{{ bird.wins }}W</span>
+                <span class="dh-record-sep">–</span>
+                <span class="dh-record-losses">{{ bird.losses }}L</span>
+              </span>
+            </td>
+            <td data-label="Actions">
+              <div class="dh-row-actions">
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#memberModal"
+                        data-mode="edit"
+                        data-id="{{ bird.id }}"
+                        data-tag-number="{{ bird.tag_number }}"
+                        data-breed="{{ bird.breed_id|default:'' }}"
+                        data-gender="{{ bird.gender }}"
+                        data-status="{{ bird.status }}"
+                        data-birth-date="{{ bird.birth_date|date:'Y-m-d' }}"
+                        data-weight="{{ bird.weight_grams|default:'' }}"
+                        data-wins="{{ bird.wins }}"
+                        data-losses="{{ bird.losses }}"
+                        data-sire="{{ bird.sire|default:'' }}"
+                        data-dam="{{ bird.dam|default:'' }}"
+                        title="Edit"
+                        aria-label="Edit {{ bird.tag_number }}">
+                  <i class="fas fa-edit text-primary"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#healthModal"
+                        data-id="{{ bird.id }}"
+                        data-tag-number="{{ bird.tag_number }}"
+                        data-health-url="{% url 'info:health_records_ajax' bird.id %}"
+                        title="Health records"
+                        aria-label="Health records for {{ bird.tag_number }}">
+                  <i class="fas fa-notes-medical text-success"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#pedigreeModal"
+                        data-id="{{ bird.id }}"
+                        data-tag-number="{{ bird.tag_number }}"
+                        data-pedigree-url="{% url 'info:pedigree_ajax' bird.id %}"
+                        title="Pedigree"
+                        aria-label="Pedigree for {{ bird.tag_number }}">
+                  <i class="fas fa-sitemap text-info"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#deleteMemberModal"
+                        data-id="{{ bird.id }}"
+                        data-tag-number="{{ bird.tag_number }}"
+                        data-delete-url="{% url 'info:info_delete_ajax' bird.id %}"
+                        title="Delete"
+                        aria-label="Delete {{ bird.tag_number }}">
+                  <i class="fas fa-trash-alt text-danger"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8">
+              <div class="empty py-5">
+                <div class="empty-icon">
+                  <i class="fas fa-dove"></i>
+                </div>
+                <p class="empty-title">No flock members found</p>
+                <p class="empty-subtitle">
+                  {% if query or status %}
+                  No birds match the current filters. Try a different search or clear the filters.
+                  {% else %}
+                  Add your first bird to start tracking your flock.
+                  {% endif %}
+                </p>
+                <div class="empty-action">
+                  {% if query or status %}
+                  <a href="{% url 'info:info_list' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-rotate-left me-2"></i>Clear filters
+                  </a>
+                  {% else %}
+                  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="create">
+                    <i class="fas fa-plus-circle me-2"></i>Add flock member
+                  </button>
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if members.paginator.num_pages > 1 %}
+    <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+      <p class="m-0 text-muted">
+        Showing <span class="fw-medium">{{ members.start_index }}</span>
+        to <span class="fw-medium">{{ members.end_index }}</span>
+        of <span class="fw-medium">{{ members.paginator.count }}</span> birds
+      </p>
+      <ul class="pagination m-0 ms-auto">
+        {% if members.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ members.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if status %}&status={{ status }}{% endif %}">
+            <i class="fas fa-chevron-left me-1"></i> prev
+          </a>
+        </li>
+        {% endif %}
+        {% for num in members.paginator.page_range %}
+        <li class="page-item {% if members.number == num %}active{% endif %}">
+          <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if status %}&status={{ status }}{% endif %}">{{ num }}</a>
+        </li>
+        {% endfor %}
+        {% if members.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ members.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if status %}&status={{ status }}{% endif %}">
+            next <i class="fas fa-chevron-right ms-1"></i>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+<!-- Add / edit flock member -->
+<div class="modal modal-blur fade" id="memberModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="dh-modal-icon" aria-hidden="true"><i class="fas fa-dove"></i></span>
+        <h5 class="modal-title" id="memberModalTitle">Add flock member</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="memberForm">
+        {% csrf_token %}
+        <input type="hidden" name="id" id="member_id">
+        <div class="modal-body">
+          <div id="memberFormError" class="alert alert-danger d-none"></div>
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="dh-form-section-title">Bird details</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Tag number</label>
+              <input type="text" name="tag_number" id="member_tag_number" class="form-control" maxlength="50" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Breed</label>
+              <select name="breed" id="member_breed" class="form-select">
+                <option value="">— Select breed —</option>
+                {% for breed in breeds %}
+                <option value="{{ breed.id }}">{{ breed.name }}</option>
+                {% endfor %}
+              </select>
+              {% if not breeds %}
+              <small class="form-hint">No breeds yet — you can create one below.</small>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Add a new breed</label>
+              <input type="text" name="new_breed" id="member_new_breed" class="form-control" maxlength="100" placeholder="e.g. Sweater">
+              <small class="form-hint">Optional. If filled, this breed is created and used instead of the selection.</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Gender</label>
+              <select name="gender" id="member_gender" class="form-select" required>
+                <option value="">Select gender</option>
+                <option value="Stag">Stag</option>
+                <option value="Cock">Cock</option>
+                <option value="Pullet">Pullet</option>
+                <option value="Hen">Hen</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Status</label>
+              <select name="status" id="member_status" class="form-select" required>
+                <option value="Active">Active</option>
+                <option value="Conditioning">Conditioning</option>
+                <option value="Broodcock">Broodcock</option>
+                <option value="Broodhen">Broodhen</option>
+                <option value="Retired">Retired</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Birth date</label>
+              <input type="date" name="birth_date" id="member_birth_date" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Weight (grams)</label>
+              <input type="number" name="weight_grams" id="member_weight" class="form-control" min="0" step="1">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Wins</label>
+              <input type="number" name="wins" id="member_wins" class="form-control" min="0" value="0">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Losses</label>
+              <input type="number" name="losses" id="member_losses" class="form-control" min="0" value="0">
+            </div>
+            <div class="col-12">
+              <div class="dh-form-section-title mt-2">Breeding</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Sire (tag)</label>
+              <input type="text" name="sire" id="member_sire" class="form-control" maxlength="50">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Dam (tag)</label>
+              <input type="text" name="dam" id="member_dam" class="form-control" maxlength="50">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="memberSubmitBtn">Save flock member</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete flock member -->
+<div class="modal modal-blur fade" id="deleteMemberModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="dh-modal-icon is-danger" aria-hidden="true"><i class="fas fa-trash-alt"></i></span>
+        <h5 class="modal-title text-danger">Delete flock member</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted">
+          Are you sure you want to delete <strong id="deleteMemberTag"></strong>?
+          Its health records will also be removed. This cannot be undone.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteMemberBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Health records -->
+<div class="modal modal-blur fade" id="healthModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="dh-modal-icon is-success" aria-hidden="true"><i class="fas fa-notes-medical"></i></span>
+        <h5 class="modal-title">Health records — <span id="healthBirdTag"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="healthFormError" class="alert alert-danger d-none"></div>
+
+        <div class="dh-form-section-title mb-2">History</div>
+        <div id="healthRecordsList" class="list-group list-group-flush dh-health-history mb-4">
+          <div class="list-group-item text-muted">Loading health records…</div>
+        </div>
+
+        <h6 class="dh-form-section-title mb-3" id="healthFormTitle">Add health record</h6>
+        <form id="healthForm">
+          {% csrf_token %}
+          <input type="hidden" name="bird_id" id="health_bird_id">
+          <input type="hidden" name="record_id" id="health_record_id">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label required">Record type</label>
+              <select name="record_type" id="health_record_type" class="form-select" required>
+                <option value="Vaccination">Vaccination</option>
+                <option value="Deworming">Deworming</option>
+                <option value="Vitamin">Vitamin / supplement</option>
+                <option value="Treatment">Injury / illness treatment</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Title</label>
+              <input type="text" name="title" id="health_title" class="form-control" maxlength="100" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Date administered</label>
+              <input type="date" name="date_administered" id="health_date_administered" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Next due date</label>
+              <input type="date" name="next_due_date" id="health_next_due_date" class="form-control">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Notes</label>
+              <textarea name="notes" id="health_notes" class="form-control" rows="2"></textarea>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost-secondary d-none" id="healthCancelEditBtn">Cancel edit</button>
+        <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-success" id="healthSubmitBtn">Add health record</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pedigree viewer -->
+<div class="modal modal-blur fade" id="pedigreeModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="dh-modal-icon is-info" aria-hidden="true"><i class="fas fa-sitemap"></i></span>
+        <h5 class="modal-title">Pedigree — <span id="pedigreeBirdTag"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="pedigreeError" class="alert alert-danger d-none"></div>
+
+        <div class="row g-3">
+          <div class="col-12">
+            <div class="card bg-primary-lt border-0">
+              <div class="card-body py-3 text-center">
+                <div class="text-muted small text-uppercase tracking-wide">Flock member</div>
+                <div class="h3 mb-0" id="pedigree_bird_tag">—</div>
+                <div class="text-muted small" id="pedigree_bird_meta"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-header">
+                <h3 class="card-title">Sire (father)</h3>
+              </div>
+              <div class="card-body">
+                <div class="fw-semibold" id="pedigree_sire_tag">—</div>
+                <div class="text-muted small mb-3" id="pedigree_sire_breed"></div>
+                <div class="text-muted small text-uppercase tracking-wide">Paternal grandsire</div>
+                <div id="pedigree_gs_paternal">—</div>
+                <div class="text-muted small text-uppercase tracking-wide mt-2">Paternal granddam</div>
+                <div id="pedigree_gd_paternal">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-header">
+                <h3 class="card-title">Dam (mother)</h3>
+              </div>
+              <div class="card-body">
+                <div class="fw-semibold" id="pedigree_dam_tag">—</div>
+                <div class="text-muted small mb-3" id="pedigree_dam_breed"></div>
+                <div class="text-muted small text-uppercase tracking-wide">Maternal grandsire</div>
+                <div id="pedigree_gs_maternal">—</div>
+                <div class="text-muted small text-uppercase tracking-wide mt-2">Maternal granddam</div>
+                <div id="pedigree_gd_maternal">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-muted small mb-0 mt-3">
+          <i class="fas fa-circle-info me-1"></i>
+          Grandparents appear when the sire or dam tag belongs to a bird in your flock.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const memberModalEl = document.getElementById('memberModal');
+  const healthModalEl = document.getElementById('healthModal');
+  const deleteModalEl = document.getElementById('deleteMemberModal');
+  const pedigreeModalEl = document.getElementById('pedigreeModal');
+
+  const memberForm = document.getElementById('memberForm');
+  const healthForm = document.getElementById('healthForm');
+
+  const memberErrorBox = document.getElementById('memberFormError');
+  const healthErrorBox = document.getElementById('healthFormError');
+  const pedigreeErrorBox = document.getElementById('pedigreeError');
+  const alertBox = document.getElementById('flockAlert');
+
+  const SAVE_MEMBER_URL = "{% url 'info:info_save_ajax' %}";
+  const SAVE_HEALTH_URL = "{% url 'info:health_record_save_ajax' %}";
+  const DELETE_HEALTH_URL = "{% url 'info:health_record_delete_ajax' 0 %}";
+
+  let deleteUrl = null;
+  let activeHealthUrl = null;
+  let activeHealthBirdId = null;
+  let healthRecordsCache = {};
+
+  function csrfToken(form) {
+    return form.querySelector('[name=csrfmiddlewaretoken]').value;
+  }
+
+  function showError(box, message) {
+    box.textContent = message;
+    box.classList.remove('d-none');
+  }
+
+  function clearError(box) {
+    box.textContent = '';
+    box.classList.add('d-none');
+  }
+
+  function setText(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+      element.textContent = (value === null || value === undefined || value === '')
+        ? 'Unknown'
+        : value;
+    }
+  }
+
+  function showAlert(message, variant) {
+    alertBox.className = 'alert alert-' + (variant || 'success') +
+      ' alert-dismissible fade show';
+    alertBox.innerHTML =
+      '<i class="fas fa-circle-check me-2" aria-hidden="true"></i>' +
+      message +
+      '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+    alertBox.classList.remove('d-none');
+  }
+
+  function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+  }
+
+  function refresh() {
+    if (typeof window.refreshMainContent === 'function') {
+      window.refreshMainContent();
+    } else {
+      window.location.reload();
+    }
+  }
+
+  // --- Member create / edit ---
+  memberModalEl.addEventListener('show.bs.modal', function (event) {
+    clearError(memberErrorBox);
+    memberForm.reset();
+    document.getElementById('member_id').value = '';
+    document.getElementById('member_new_breed').value = '';
+    document.getElementById('member_wins').value = '0';
+    document.getElementById('member_losses').value = '0';
+    document.getElementById('memberModalTitle').textContent = 'Add flock member';
+
+    const button = event.relatedTarget;
+    if (!button || button.dataset.mode !== 'edit') {
+      document.getElementById('member_status').value = 'Active';
+      return;
+    }
+
+    document.getElementById('memberModalTitle').textContent = 'Edit flock member';
+    document.getElementById('member_id').value = button.dataset.id;
+    document.getElementById('member_tag_number').value = button.dataset.tagNumber || '';
+    document.getElementById('member_breed').value = button.dataset.breed || '';
+    document.getElementById('member_gender').value = button.dataset.gender || '';
+    document.getElementById('member_status').value = button.dataset.status || 'Active';
+    document.getElementById('member_birth_date').value = button.dataset.birthDate || '';
+    document.getElementById('member_weight').value = button.dataset.weight || '';
+    document.getElementById('member_wins').value = button.dataset.wins || '0';
+    document.getElementById('member_losses').value = button.dataset.losses || '0';
+    document.getElementById('member_sire').value = button.dataset.sire || '';
+    document.getElementById('member_dam').value = button.dataset.dam || '';
+  });
+
+  memberForm.addEventListener('submit', function (event) {
+    event.preventDefault();
+    clearError(memberErrorBox);
+
+    const submitBtn = document.getElementById('memberSubmitBtn');
+    submitBtn.disabled = true;
+
+    fetch(SAVE_MEMBER_URL, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken(memberForm) },
+      body: new FormData(memberForm),
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not save the flock member.');
+        }
+        return data;
+      })
+      .then(function () {
+        bootstrap.Modal.getOrCreateInstance(memberModalEl).hide();
+        refresh();
+      })
+      .catch(function (error) {
+        showError(memberErrorBox, error.message);
+      })
+      .finally(function () {
+        submitBtn.disabled = false;
+      });
+  });
+
+  // --- Delete ---
+  deleteModalEl.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    deleteUrl = button.dataset.deleteUrl;
+    document.getElementById('deleteMemberTag').textContent = button.dataset.tagNumber || '';
+  });
+
+  document.getElementById('confirmDeleteMemberBtn').addEventListener('click', function () {
+    if (!deleteUrl) return;
+    const button = this;
+    button.disabled = true;
+
+    fetch(deleteUrl, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken(memberForm) },
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not delete the flock member.');
+        }
+        return data;
+      })
+      .then(function (data) {
+        bootstrap.Modal.getOrCreateInstance(deleteModalEl).hide();
+        showAlert(data.message || 'Flock member deleted successfully.', 'success');
+        refresh();
+      })
+      .catch(function (error) {
+        showAlert(error.message, 'danger');
+      })
+      .finally(function () {
+        button.disabled = false;
+        deleteUrl = null;
+      });
+  });
+
+  // --- Health records ---
+  function healthDeleteUrl(recordId) {
+    return DELETE_HEALTH_URL.replace(/0\/$/, recordId + '/');
+  }
+
+  function resetHealthForm() {
+    document.getElementById('health_record_id').value = '';
+    document.getElementById('health_record_type').value = 'Vaccination';
+    document.getElementById('health_title').value = '';
+    document.getElementById('health_next_due_date').value = '';
+    document.getElementById('health_notes').value = '';
+    document.getElementById('health_date_administered').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('healthSubmitBtn').textContent = 'Add health record';
+    document.getElementById('healthCancelEditBtn').classList.add('d-none');
+    document.getElementById('healthFormTitle').textContent = 'Add health record';
+    clearError(healthErrorBox);
+  }
+
+  function editHealthRecord(record) {
+    document.getElementById('health_record_id').value = record.id;
+    document.getElementById('health_record_type').value = record.record_type;
+    document.getElementById('health_title').value = record.title;
+    document.getElementById('health_date_administered').value = record.date_administered;
+    document.getElementById('health_next_due_date').value = record.next_due_date || '';
+    document.getElementById('health_notes').value = record.notes || '';
+    document.getElementById('healthSubmitBtn').textContent = 'Save changes';
+    document.getElementById('healthCancelEditBtn').classList.remove('d-none');
+    document.getElementById('healthFormTitle').textContent = 'Edit health record';
+    clearError(healthErrorBox);
+    document.getElementById('health_title').focus();
+  }
+
+  function loadHealthRecords() {
+    const list = document.getElementById('healthRecordsList');
+    if (!activeHealthUrl) return;
+
+    list.innerHTML = '<div class="list-group-item text-muted">Loading health records…</div>';
+
+    fetch(activeHealthUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not load health records.');
+        }
+        return data;
+      })
+      .then(function (data) {
+        healthRecordsCache = {};
+        if (!data.data || data.data.length === 0) {
+          list.innerHTML = '<div class="list-group-item text-muted text-center py-4">' +
+            '<i class="fas fa-notes-medical d-block mb-2"></i>No health records yet.' +
+            '</div>';
+          return;
+        }
+
+        list.innerHTML = data.data.map(function (record) {
+          healthRecordsCache[record.id] = record;
+          const due = record.next_due_date
+            ? ' · next due ' + escapeHtml(record.next_due_date)
+            : '';
+          const notes = record.notes
+            ? '<div class="text-muted small mt-1">' + escapeHtml(record.notes) + '</div>'
+            : '';
+          return (
+            '<div class="list-group-item">' +
+              '<div class="d-flex justify-content-between align-items-start gap-2">' +
+                '<div class="min-w-0">' +
+                  '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+                    '<span class="fw-medium">' + escapeHtml(record.title) + '</span>' +
+                    '<span class="badge bg-blue-lt text-blue">' + escapeHtml(record.record_type) + '</span>' +
+                  '</div>' +
+                  '<div class="text-muted small">' + escapeHtml(record.date_administered) + due + '</div>' +
+                  notes +
+                '</div>' +
+                '<div class="btn-list flex-nowrap">' +
+                  '<button type="button" class="btn btn-ghost-secondary btn-icon btn-sm health-edit-btn" data-record-id="' + record.id + '" title="Edit health record" aria-label="Edit health record">' +
+                    '<i class="fas fa-pen"></i>' +
+                  '</button>' +
+                  '<button type="button" class="btn btn-ghost-secondary btn-icon btn-sm health-delete-btn" data-record-id="' + record.id + '" title="Delete health record" aria-label="Delete health record">' +
+                    '<i class="fas fa-trash-alt text-danger"></i>' +
+                  '</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join('');
+      })
+      .catch(function (error) {
+        list.innerHTML = '<div class="list-group-item text-danger">' +
+          escapeHtml(error.message || 'Could not load health records.') + '</div>';
+      });
+  }
+
+  document.getElementById('healthRecordsList').addEventListener('click', function (event) {
+    const editButton = event.target.closest('.health-edit-btn');
+    const deleteButton = event.target.closest('.health-delete-btn');
+
+    if (editButton) {
+      const record = healthRecordsCache[editButton.dataset.recordId];
+      if (record) editHealthRecord(record);
+      return;
+    }
+
+    if (!deleteButton) return;
+
+    const recordId = deleteButton.dataset.recordId;
+    if (!recordId || !window.confirm('Delete this health record? This cannot be undone.')) {
+      return;
+    }
+
+    deleteButton.disabled = true;
+    fetch(healthDeleteUrl(recordId), {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken(healthForm) },
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not delete the health record.');
+        }
+        return data;
+      })
+      .then(function (data) {
+        showAlert(data.message || 'Health record deleted successfully.', 'success');
+        if (document.getElementById('health_record_id').value === recordId) {
+          resetHealthForm();
+        }
+        loadHealthRecords();
+        if (typeof window.refreshMainContent === 'function') {
+          setTimeout(window.refreshMainContent, 800);
+        }
+      })
+      .catch(function (error) {
+        showError(healthErrorBox, error.message);
+      })
+      .finally(function () {
+        deleteButton.disabled = false;
+      });
+  });
+
+  healthModalEl.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    activeHealthUrl = button.dataset.healthUrl;
+    activeHealthBirdId = button.dataset.id;
+
+    document.getElementById('healthBirdTag').textContent = button.dataset.tagNumber || '';
+    document.getElementById('health_bird_id').value = activeHealthBirdId;
+    resetHealthForm();
+    loadHealthRecords();
+  });
+
+  document.getElementById('healthCancelEditBtn').addEventListener('click', resetHealthForm);
+
+  document.getElementById('healthSubmitBtn').addEventListener('click', function () {
+    clearError(healthErrorBox);
+    const button = this;
+    button.disabled = true;
+
+    fetch(SAVE_HEALTH_URL, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken(healthForm) },
+      body: new FormData(healthForm),
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not save the health record.');
+        }
+        return data;
+      })
+      .then(function (data) {
+        showAlert(data.message || 'Health record saved successfully.', 'success');
+        resetHealthForm();
+        loadHealthRecords();
+        if (typeof window.refreshMainContent === 'function') {
+          setTimeout(window.refreshMainContent, 800);
+        }
+      })
+      .catch(function (error) {
+        showError(healthErrorBox, error.message);
+      })
+      .finally(function () {
+        button.disabled = false;
+      });
+  });
+
+  // --- Pedigree ---
+  function resetPedigree() {
+    setText('pedigree_bird_tag', '—');
+    document.getElementById('pedigree_bird_meta').textContent = '';
+    setText('pedigree_sire_tag', '—');
+    setText('pedigree_sire_breed', '');
+    setText('pedigree_dam_tag', '—');
+    setText('pedigree_dam_breed', '');
+    setText('pedigree_gs_paternal', '—');
+    setText('pedigree_gd_paternal', '—');
+    setText('pedigree_gs_maternal', '—');
+    setText('pedigree_gd_maternal', '—');
+  }
+
+  pedigreeModalEl.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const url = button.dataset.pedigreeUrl;
+
+    clearError(pedigreeErrorBox);
+    resetPedigree();
+    document.getElementById('pedigreeBirdTag').textContent = button.dataset.tagNumber || '';
+
+    if (!url) {
+      showError(pedigreeErrorBox, 'Pedigree data is unavailable for this bird.');
+      return;
+    }
+
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not load the pedigree.');
+        }
+        return data;
+      })
+      .then(function (data) {
+        const lineage = data.lineage || {};
+        const bird = lineage.bird || {};
+        const sire = lineage.sire || {};
+        const dam = lineage.dam || {};
+
+        setText('pedigree_bird_tag', bird.tag);
+        document.getElementById('pedigree_bird_meta').textContent =
+          [bird.breed, bird.gender].filter(Boolean).join(' · ');
+        setText('pedigree_sire_tag', sire.tag);
+        setText('pedigree_sire_breed', sire.breed);
+        setText('pedigree_dam_tag', dam.tag);
+        setText('pedigree_dam_breed', dam.breed);
+        setText('pedigree_gs_paternal', lineage.grand_sire_paternal);
+        setText('pedigree_gd_paternal', lineage.grand_dam_paternal);
+        setText('pedigree_gs_maternal', lineage.grand_sire_maternal);
+        setText('pedigree_gd_maternal', lineage.grand_dam_maternal);
+      })
+      .catch(function (error) {
+        showError(pedigreeErrorBox, error.message);
+      });
+  });
+})();
+</script>
+{% endblock %}

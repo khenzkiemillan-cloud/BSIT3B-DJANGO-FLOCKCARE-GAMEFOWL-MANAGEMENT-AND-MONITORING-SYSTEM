@@ -1,0 +1,19 @@
+/*
+ * Inter variable font, served locally so the UI renders without internet.
+ * Source: https://rsms.me/inter/ (SIL Open Font License 1.1).
+ */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("webfonts/InterVariable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("webfonts/InterVariable-Italic.woff2") format("woff2");
+}
