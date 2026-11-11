@@ -33,6 +33,17 @@
     </div>
   </div>
 
+  {% if medicine_alert_count %}
+  <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2" role="alert">
+    <i class="fas fa-prescription-bottle-medical" aria-hidden="true"></i>
+    <span>
+      <strong>{{ medicine_alert_count }}</strong> medicine{{ medicine_alert_count|pluralize }} need{{ medicine_alert_count|pluralize }}
+      attention — low stock or nearing expiry.
+    </span>
+    <a href="{% url 'info:medicine_list' %}" class="alert-link ms-auto">Open medicine cabinet</a>
+  </div>
+  {% endif %}
+
   <div class="row row-cards mt-1">
     <div class="col-6 col-lg-3">
       <div class="card stat-card stat-card-primary text-white">
@@ -69,7 +80,10 @@
       </div>
     </div>
     <div class="col-6 col-lg-3">
-      <div class="card stat-card stat-card-warning text-white">
+      <a href="{% url 'info:info_list' %}?status=Conditioning"
+         class="card stat-card stat-card-warning text-white text-decoration-none h-100"
+         title="View birds in conditioning"
+         aria-label="View {{ conditioning_birds }} bird{{ conditioning_birds|pluralize }} in conditioning">
         <div class="card-body">
           <div class="d-flex align-items-center justify-content-between">
             <div>
@@ -78,12 +92,13 @@
               <div class="dh-stat-meta">
                 <i class="fas fa-dumbbell"></i>
                 {{ conditioning_pct }}% of the flock
+                <i class="fas fa-arrow-right ms-1"></i>
               </div>
             </div>
             <span class="stat-card-icon"><i class="fas fa-dumbbell"></i></span>
           </div>
         </div>
-      </div>
+      </a>
     </div>
     <div class="col-6 col-lg-3">
       <div class="card stat-card stat-card-info text-white">
@@ -181,11 +196,14 @@
       <div class="card h-100">
         <div class="card-header d-flex align-items-center">
           <h3 class="card-title mb-0">Health reminders</h3>
-          {% if overdue_count %}
-          <span class="badge bg-danger-lt text-danger ms-auto">{{ overdue_count }} overdue</span>
-          {% elif upcoming_count %}
-          <span class="badge bg-primary-lt text-primary ms-auto">{{ upcoming_count }} upcoming</span>
-          {% endif %}
+          <div class="ms-auto d-flex align-items-center gap-2">
+            {% if overdue_count %}
+            <span class="badge bg-danger-lt text-danger">{{ overdue_count }} overdue</span>
+            {% elif upcoming_count %}
+            <span class="badge bg-primary-lt text-primary">{{ upcoming_count }} upcoming</span>
+            {% endif %}
+            <a href="{% url 'info:health_list' %}" class="btn btn-sm btn-outline-primary">View all</a>
+          </div>
         </div>
         <div class="list-group list-group-flush">
           {% for record in overdue_records %}
@@ -316,6 +334,14 @@
             <a href="{% url 'info:info_list' %}" class="dh-quick-action">
               <i class="fas fa-dove"></i>
               <span>Manage flock</span>
+            </a>
+            <a href="{% url 'info:health_list' %}" class="dh-quick-action">
+              <i class="fas fa-heart-pulse"></i>
+              <span>Health schedule</span>
+            </a>
+            <a href="{% url 'info:medicine_list' %}" class="dh-quick-action">
+              <i class="fas fa-prescription-bottle-medical"></i>
+              <span>Medicine cabinet</span>
             </a>
             <a href="{% url 'info:export_flock_csv' %}" class="dh-quick-action">
               <i class="fas fa-file-csv"></i>

@@ -154,3 +154,37 @@ class UserManagementTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertIn('not found', response.json()['error'].lower())
+
+
+class UserProfileTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='breeder-one',
+            email='breeder@example.com',
+            password=STRONG_PASSWORD,
+        )
+        self.client.force_login(self.user)
+
+    def test_profile_page_renders_for_logged_in_user(self):
+        response = self.client.get(reverse('users:profile'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'users/profile.html')
+        self.assertContains(response, 'Farm Profile &amp; Settings')
+
+    def test_profile_updates_farm_and_user_details(self):
+        response = self.client.post(reverse('users:profile'), {
+            'first_name': 'Carlos',
+            'last_name': 'Santos',
+            'email': 'carlos@example.com',
+            'farm_name': 'Santos Gamefarm',
+            'contact_number': '+63 912 345 6789',
+            'location': 'Batangas, Philippines',
+            'association_id': 'FIGBA-2026-99',
+            'bio': 'Sweater and Roundhead specialist.',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, 'Carlos')
+        self.assertEqual(self.user.profile.farm_name, 'Santos Gamefarm')
+        self.assertEqual(self.user.profile.association_id, 'FIGBA-2026-99')
+

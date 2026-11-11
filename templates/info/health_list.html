@@ -1,0 +1,477 @@
+{% extends "theme/base.html" %}
+{% block content %}
+
+  <div class="page-header d-print-none mb-4" aria-label="Page header">
+    <div class="row align-items-center">
+      <div class="col">
+        <nav aria-label="Breadcrumb">
+          <ol class="dh-breadcrumb">
+            <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
+            <li class="is-current">Health</li>
+          </ol>
+        </nav>
+        <div class="page-pretitle">Health &amp; care</div>
+        <h2 class="page-title mb-0">Health records</h2>
+        <p class="dh-page-subtitle">
+          Log vaccinations, deworming, vitamins and treatments, then keep every follow-up on schedule.
+        </p>
+      </div>
+      <div class="col-12 col-md-auto">
+        <div class="btn-list">
+          <a href="{% url 'info:export_health_csv' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-file-csv me-2"></i>Export CSV
+          </a>
+          <button type="button"
+                  class="btn btn-primary"
+                  data-bs-toggle="modal"
+                  data-bs-target="#healthRecordModal"
+                  data-mode="create">
+            <i class="fas fa-notes-medical me-2"></i>Add health record
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dh-mini-stats">
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-primary"><i class="fas fa-notes-medical"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Health records</span>
+        <span class="dh-mini-stat-value">{{ counts.total }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-danger"><i class="fas fa-triangle-exclamation"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Overdue</span>
+        <span class="dh-mini-stat-value">{{ counts.overdue }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-warning"><i class="fas fa-calendar-day"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Due in {{ due_window_days }} days</span>
+        <span class="dh-mini-stat-value">{{ counts.due_soon }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-success"><i class="fas fa-dove"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Birds covered</span>
+        <span class="dh-mini-stat-value">{{ counts.birds_covered }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dh-toolbar">
+    <form method="GET" class="dh-search-form">
+      <label class="visually-hidden" for="healthSearch">Search health records</label>
+      <div class="input-group">
+        <span class="input-group-text"><i class="fas fa-search"></i></span>
+        <input type="text"
+               id="healthSearch"
+               name="q"
+               value="{{ query }}"
+               class="form-control"
+               placeholder="Search by bird tag, title, type or notes...">
+        <select name="record_type" class="form-select" aria-label="Filter by record type">
+          <option value="">All types</option>
+          {% for value, label in record_types %}
+          <option value="{{ value }}" {% if record_type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% if state %}<input type="hidden" name="state" value="{{ state }}">{% endif %}
+        {% if query or state or record_type %}
+        <a href="{% url 'info:health_list' %}" class="btn btn-outline-secondary">Clear</a>
+        {% endif %}
+        <button type="submit" class="btn btn-primary">Search</button>
+      </div>
+    </form>
+
+    <div class="dh-filter-chips" role="group" aria-label="Filter health records">
+      <a href="?{% if query %}q={{ query|urlencode }}{% endif %}{% if query and record_type %}&{% endif %}{% if record_type %}record_type={{ record_type }}{% endif %}"
+         class="dh-chip {% if not state %}is-active{% endif %}">
+        All <span class="dh-chip-count">{{ counts.total }}</span>
+      </a>
+      <a href="?state=overdue{% if query %}&q={{ query|urlencode }}{% endif %}{% if record_type %}&record_type={{ record_type }}{% endif %}"
+         class="dh-chip {% if state == 'overdue' %}is-active{% endif %}">
+        Overdue <span class="dh-chip-count">{{ counts.overdue }}</span>
+      </a>
+      <a href="?state=upcoming{% if query %}&q={{ query|urlencode }}{% endif %}{% if record_type %}&record_type={{ record_type }}{% endif %}"
+         class="dh-chip {% if state == 'upcoming' %}is-active{% endif %}">
+        Due soon <span class="dh-chip-count">{{ counts.due_soon }}</span>
+      </a>
+      <a href="?state=scheduled{% if query %}&q={{ query|urlencode }}{% endif %}{% if record_type %}&record_type={{ record_type }}{% endif %}"
+         class="dh-chip {% if state == 'scheduled' %}is-active{% endif %}">
+        Scheduled <span class="dh-chip-count">{{ counts.scheduled }}</span>
+      </a>
+      <a href="?state=unscheduled{% if query %}&q={{ query|urlencode }}{% endif %}{% if record_type %}&record_type={{ record_type }}{% endif %}"
+         class="dh-chip {% if state == 'unscheduled' %}is-active{% endif %}">
+        No follow-up <span class="dh-chip-count">{{ counts.unscheduled }}</span>
+      </a>
+    </div>
+  </div>
+
+  <div id="healthAlert" class="alert d-none alert-dismissible fade" role="alert"></div>
+
+  <div class="card">
+    <div class="card-header d-flex align-items-center">
+      <div class="card-title mb-0">
+        {% if query or state or record_type %}
+          Filtered health records
+        {% else %}
+          Care schedule
+        {% endif %}
+        {% if query %}
+        <span class="text-muted fw-normal">— results for "{{ query }}"</span>
+        {% endif %}
+      </div>
+      <span class="badge bg-primary-lt text-primary ms-auto">{{ records.paginator.count }} record{{ records.paginator.count|pluralize }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-vcenter table-hover card-table text-nowrap dh-stack-table" id="healthRecordsTable">
+        <thead>
+          <tr>
+            <th>Bird</th>
+            <th>Type</th>
+            <th>Record</th>
+            <th>Administered</th>
+            <th>Next due</th>
+            <th>Status</th>
+            <th class="w-1">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in records %}
+          <tr data-record-id="{{ record.id }}">
+            <td class="fw-semibold" data-label="Bird">
+              <span class="dh-table-tag">
+                <span class="dh-table-avatar"><i class="fas fa-dove"></i></span>
+                <span class="dh-tag">{{ record.bird.tag_number }}</span>
+              </span>
+            </td>
+            <td data-label="Type">
+              <span class="badge bg-blue-lt text-blue">{{ record.record_type }}</span>
+            </td>
+            <td data-label="Record">
+              <div class="fw-medium">{{ record.title }}</div>
+              {% if record.notes %}
+              <div class="text-muted small text-truncate" style="max-width: 20rem;">{{ record.notes }}</div>
+              {% endif %}
+            </td>
+            <td class="text-muted" data-label="Administered">{{ record.date_administered|date:"M j, Y" }}</td>
+            <td class="text-muted" data-label="Next due">
+              {% if record.next_due_date %}
+                {{ record.next_due_date|date:"M j, Y" }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td data-label="Status">
+              {% if not record.next_due_date %}
+              <span class="dh-status is-muted"><span class="dh-status-dot"></span>No follow-up</span>
+              {% elif record.next_due_date < today %}
+              <span class="dh-status is-danger"><span class="dh-status-dot"></span>Overdue</span>
+              {% elif record.next_due_date <= due_cutoff %}
+              <span class="dh-status is-warning"><span class="dh-status-dot"></span>Due soon</span>
+              {% else %}
+              <span class="dh-status is-active"><span class="dh-status-dot"></span>Scheduled</span>
+              {% endif %}
+            </td>
+            <td data-label="Actions">
+              <div class="dh-row-actions">
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#healthRecordModal"
+                        data-mode="edit"
+                        data-record-id="{{ record.id }}"
+                        data-bird-id="{{ record.bird_id }}"
+                        data-tag-number="{{ record.bird.tag_number }}"
+                        data-record-type="{{ record.record_type }}"
+                        data-title="{{ record.title }}"
+                        data-date-administered="{{ record.date_administered|date:'Y-m-d' }}"
+                        data-next-due-date="{{ record.next_due_date|date:'Y-m-d' }}"
+                        data-notes="{{ record.notes|default:'' }}"
+                        title="Edit health record"
+                        aria-label="Edit health record for {{ record.bird.tag_number }}">
+                  <i class="fas fa-edit text-primary"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm health-delete-btn"
+                        data-record-id="{{ record.id }}"
+                        data-title="{{ record.title }}"
+                        data-delete-url="{% url 'info:health_record_delete_ajax' record.id %}"
+                        title="Delete health record"
+                        aria-label="Delete health record {{ record.title }}">
+                  <i class="fas fa-trash-alt text-danger"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7">
+              <div class="empty py-5">
+                <div class="empty-icon">
+                  <i class="fas fa-notes-medical"></i>
+                </div>
+                <p class="empty-title">No health records found</p>
+                <p class="empty-subtitle">
+                  {% if query or state or record_type %}
+                  No records match the current filters. Try a different search or clear the filters.
+                  {% else %}
+                  Log your first vaccination, deworming or treatment to start a care schedule.
+                  {% endif %}
+                </p>
+                <div class="empty-action">
+                  {% if query or state or record_type %}
+                  <a href="{% url 'info:health_list' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-rotate-left me-2"></i>Clear filters
+                  </a>
+                  {% else %}
+                  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#healthRecordModal" data-mode="create">
+                    <i class="fas fa-notes-medical me-2"></i>Add health record
+                  </button>
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if records.paginator.num_pages > 1 %}
+    <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+      <p class="m-0 text-muted">
+        Showing <span class="fw-medium">{{ records.start_index }}</span>
+        to <span class="fw-medium">{{ records.end_index }}</span>
+        of <span class="fw-medium">{{ records.paginator.count }}</span> records
+      </p>
+      <ul class="pagination m-0 ms-auto">
+        {% if records.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ records.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if state %}&state={{ state }}{% endif %}{% if record_type %}&record_type={{ record_type }}{% endif %}">
+            <i class="fas fa-chevron-left me-1"></i> prev
+          </a>
+        </li>
+        {% endif %}
+        {% for num in records.paginator.page_range %}
+        <li class="page-item {% if records.number == num %}active{% endif %}">
+          <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if state %}&state={{ state }}{% endif %}{% if record_type %}&record_type={{ record_type }}{% endif %}">{{ num }}</a>
+        </li>
+        {% endfor %}
+        {% if records.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ records.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if state %}&state={{ state }}{% endif %}{% if record_type %}&record_type={{ record_type }}{% endif %}">
+            next <i class="fas fa-chevron-right ms-1"></i>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+<!-- Add / edit health record -->
+<div class="modal modal-blur fade" id="healthRecordModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="dh-modal-icon is-success" aria-hidden="true"><i class="fas fa-notes-medical"></i></span>
+        <h5 class="modal-title" id="healthRecordModalTitle">Add health record</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="healthRecordForm">
+        {% csrf_token %}
+        <input type="hidden" name="record_id" id="health_record_id">
+        <div class="modal-body">
+          <div id="healthRecordFormError" class="alert alert-danger d-none"></div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label required">Bird</label>
+              <select name="bird_id" id="health_bird_id" class="form-select" required>
+                <option value="">— Select bird —</option>
+                {% for bird in birds %}
+                <option value="{{ bird.id }}">{{ bird.tag_number }} — {{ bird.gender }}</option>
+                {% endfor %}
+              </select>
+              {% if not birds %}
+              <small class="form-hint">Add a flock member first to log health records.</small>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Record type</label>
+              <select name="record_type" id="health_record_type" class="form-select" required>
+                {% for value, label in record_types %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Title</label>
+              <input type="text" name="title" id="health_title" class="form-control" maxlength="100" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Date administered</label>
+              <input type="date" name="date_administered" id="health_date_administered" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Next due date</label>
+              <input type="date" name="next_due_date" id="health_next_due_date" class="form-control">
+              <small class="form-hint">Leave blank if no follow-up is needed.</small>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Notes</label>
+              <textarea name="notes" id="health_notes" class="form-control" rows="3" placeholder="Dosage, reaction, or other observations..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="healthSubmitBtn" {% if not birds %}disabled{% endif %}>
+            Save health record
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const modalEl = document.getElementById('healthRecordModal');
+  const form = document.getElementById('healthRecordForm');
+  const errorBox = document.getElementById('healthRecordFormError');
+  const alertBox = document.getElementById('healthAlert');
+  const tableBody = document.getElementById('healthRecordsTable');
+
+  const SAVE_URL = "{% url 'info:health_record_save_ajax' %}";
+  const DELETE_URL = "{% url 'info:health_record_delete_ajax' 0 %}";
+
+  function csrfToken() {
+    return form.querySelector('[name=csrfmiddlewaretoken]').value;
+  }
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.classList.remove('d-none');
+  }
+
+  function clearError() {
+    errorBox.textContent = '';
+    errorBox.classList.add('d-none');
+  }
+
+  function showAlert(message, variant) {
+    alertBox.className = 'alert alert-' + (variant || 'success') +
+      ' alert-dismissible fade show';
+    alertBox.innerHTML =
+      '<i class="fas fa-circle-check me-2" aria-hidden="true"></i>' +
+      message +
+      '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+    alertBox.classList.remove('d-none');
+  }
+
+  function refresh() {
+    if (typeof window.refreshMainContent === 'function') {
+      window.refreshMainContent();
+    } else {
+      window.location.reload();
+    }
+  }
+
+  function resetForm() {
+    form.reset();
+    document.getElementById('health_record_id').value = '';
+    document.getElementById('health_date_administered').value =
+      new Date().toISOString().slice(0, 10);
+    document.getElementById('healthRecordModalTitle').textContent = 'Add health record';
+    document.getElementById('healthSubmitBtn').textContent = 'Save health record';
+    clearError();
+  }
+
+  modalEl.addEventListener('show.bs.modal', function (event) {
+    resetForm();
+    const button = event.relatedTarget;
+    if (!button || button.dataset.mode !== 'edit') return;
+
+    document.getElementById('healthRecordModalTitle').textContent = 'Edit health record';
+    document.getElementById('healthSubmitBtn').textContent = 'Save changes';
+    document.getElementById('health_record_id').value = button.dataset.recordId || '';
+    document.getElementById('health_bird_id').value = button.dataset.birdId || '';
+    document.getElementById('health_record_type').value = button.dataset.recordType || 'Vaccination';
+    document.getElementById('health_title').value = button.dataset.title || '';
+    document.getElementById('health_date_administered').value = button.dataset.dateAdministered || '';
+    document.getElementById('health_next_due_date').value = button.dataset.nextDueDate || '';
+    document.getElementById('health_notes').value = button.dataset.notes || '';
+  });
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    clearError();
+
+    const submitBtn = document.getElementById('healthSubmitBtn');
+    submitBtn.disabled = true;
+
+    fetch(SAVE_URL, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken() },
+      body: new FormData(form),
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not save the health record.');
+        }
+        return data;
+      })
+      .then(function (data) {
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        showAlert(data.message || 'Health record saved successfully.', 'success');
+        refresh();
+      })
+      .catch(function (error) {
+        showError(error.message);
+      })
+      .finally(function () {
+        submitBtn.disabled = false;
+      });
+  });
+
+  tableBody.addEventListener('click', function (event) {
+    const button = event.target.closest('.health-delete-btn');
+    if (!button) return;
+
+    const title = button.dataset.title || 'this health record';
+    if (!window.confirm('Delete "' + title + '"? This cannot be undone.')) return;
+
+    button.disabled = true;
+    fetch(button.dataset.deleteUrl, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken() },
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not delete the health record.');
+        }
+        return data;
+      })
+      .then(function (data) {
+        showAlert(data.message || 'Health record deleted successfully.', 'success');
+        refresh();
+      })
+      .catch(function (error) {
+        showAlert(error.message, 'danger');
+      })
+      .finally(function () {
+        button.disabled = false;
+      });
+  });
+})();
+</script>
+{% endblock %}

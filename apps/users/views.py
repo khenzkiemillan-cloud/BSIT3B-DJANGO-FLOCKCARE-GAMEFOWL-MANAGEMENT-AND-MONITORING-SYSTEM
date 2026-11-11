@@ -1,6 +1,8 @@
-from django.shortcuts import render, get_object_or_404
+from functools import wraps
+from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.password_validation import validate_password
@@ -11,9 +13,24 @@ from django.db import IntegrityError
 from django.db.models import Count, Q
 from django.views.decorators.http import require_POST
 
+from .models import UserProfile
+from .forms import UserProfileForm
+
 
 def _is_superuser(user):
     return user.is_superuser
+
+
+def _ajax_superuser_required(view_func):
+    """Return JSON 403 instead of an HTML redirect when a non-admin calls an AJAX endpoint."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': 'Authentication required.'}, status=401)
+        if not request.user.is_superuser:
+            return JsonResponse({'error': 'Permission denied. Administrator access required.'}, status=403)
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 
 # PAGE
@@ -66,7 +83,7 @@ def user_list_page(request):
 
 # LIST USERS (AJAX)
 @login_required(login_url='login')
-@user_passes_test(_is_superuser, login_url='dashboard')
+@_ajax_superuser_required
 def user_list_ajax(request):
     query = request.GET.get('q', '').strip()
     role = request.GET.get('role', '').strip()
@@ -114,7 +131,7 @@ def user_list_ajax(request):
 
 # GET SINGLE USER (AJAX)
 @login_required(login_url='login')
-@user_passes_test(_is_superuser, login_url='dashboard')
+@_ajax_superuser_required
 def user_get_ajax(request, pk):
     user = get_object_or_404(User, pk=pk)
     return JsonResponse({
@@ -130,7 +147,7 @@ def user_get_ajax(request, pk):
 
 # CREATE / UPDATE USER (AJAX)
 @login_required(login_url='login')
-@user_passes_test(_is_superuser, login_url='dashboard')
+@_ajax_superuser_required
 @require_POST
 def user_save_ajax(request):
     user_id = request.POST.get("id")
@@ -212,7 +229,7 @@ def user_save_ajax(request):
 
 # DELETE USER (AJAX)
 @login_required(login_url='login')
-@user_passes_test(_is_superuser, login_url='dashboard')
+@_ajax_superuser_required
 @require_POST
 def user_delete_ajax(request, pk):
     user = get_object_or_404(User, pk=pk)
@@ -224,3 +241,60 @@ def user_delete_ajax(request, pk):
         "status": "deleted",
         "message": f'User "{username}" has been deleted successfully.',
     })
+
+
+# USER PROFILE & SETTINGS
+@login_required(login_url='login')
+def user_profile_page(request):
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        user = request.user
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip()
+
+        # Update profile info
+        profile.farm_name = request.POST.get('farm_name', '').strip()
+        profile.contact_number = request.POST.get('contact_number', '').strip()
+        profile.location = request.POST.get('location', '').strip()
+        profile.association_id = request.POST.get('association_id', '').strip()
+        profile.bio = request.POST.get('bio', '').strip()
+
+        if email:
+            try:
+                validate_email(email)
+            except ValidationError:
+                messages.error(request, 'Please enter a valid email address.')
+                return render(request, 'users/profile.html', {'profile': profile})
+
+            duplicate = User.objects.filter(email__iexact=email).exclude(pk=user.pk).exists()
+            if duplicate:
+                messages.error(request, 'That email address is already in use by another account.')
+                return render(request, 'users/profile.html', {'profile': profile})
+            user.email = email
+
+        user.first_name = first_name
+        user.last_name = last_name
+
+        # Password change
+        new_password = request.POST.get('new_password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+        if new_password:
+            if new_password != confirm_password:
+                messages.error(request, 'New passwords do not match.')
+                return render(request, 'users/profile.html', {'profile': profile})
+            try:
+                validate_password(new_password, user)
+            except ValidationError as exc:
+                messages.error(request, ' '.join(exc.messages))
+                return render(request, 'users/profile.html', {'profile': profile})
+            user.set_password(new_password)
+            update_session_auth_hash(request, user)
+
+        user.save()
+        profile.save()
+        messages.success(request, 'Your profile and farm details have been updated successfully.')
+        return redirect('users:profile')
+
+    return render(request, 'users/profile.html', {'profile': profile})

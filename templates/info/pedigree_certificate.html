@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Certificate of Pedigree — {{ bird.tag_number }} | FlockCare</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary: #12142c;
+      --accent: #f59e0b;
+      --border: #e2e8f0;
+      --bg: #f8fafc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      padding: 24px;
+    }
+    .print-bar {
+      max-width: 960px;
+      margin: 0 auto 16px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #334155;
+    }
+    .btn-primary {
+      background: #12142c;
+      color: #ffffff;
+      border-color: #12142c;
+    }
+    .certificate-sheet {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 8px double #12142c;
+      padding: 40px;
+      border-radius: 4px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+      position: relative;
+    }
+    .cert-header {
+      text-align: center;
+      border-bottom: 2px solid #12142c;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+    }
+    .farm-name {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #12142c;
+    }
+    .cert-title {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #d97706;
+      margin-top: 6px;
+    }
+    .farm-meta {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    .bird-overview {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .overview-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 13px;
+      border-bottom: 1px dashed #e2e8f0;
+    }
+    .overview-label { color: #64748b; font-weight: 500; }
+    .overview-value { color: #0f172a; font-weight: 700; }
+    .tree-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .tree-column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .tree-card {
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 10px;
+      background: #ffffff;
+      font-size: 12px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-left: 4px solid #12142c;
+    }
+    .tree-card.is-sire { border-left-color: #2563eb; }
+    .tree-card.is-dam { border-left-color: #ec4899; }
+    .node-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: #64748b;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .node-tag {
+      font-size: 13px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .node-breed {
+      font-size: 11px;
+      color: #475569;
+    }
+    .cert-footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .signature-line {
+      border-bottom: 1px solid #334155;
+      height: 40px;
+      margin-bottom: 6px;
+    }
+    .signature-label {
+      font-size: 12px;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+    @media print {
+      body { background: #ffffff; padding: 0; }
+      .print-bar { display: none !none; }
+      .certificate-sheet { box-shadow: none; border-width: 4px; padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="print-bar">
+    <a href="{% url 'info:info_list' %}" class="btn">
+      <i class="fa fa-arrow-left"></i> Back to Flock
+    </a>
+    <button onclick="window.print()" class="btn btn-primary">
+      <i class="fa fa-print"></i> Print Official Certificate
+    </button>
+  </div>
+
+  <div class="certificate-sheet">
+    <div class="cert-header">
+      <div class="farm-name">{{ profile.farm_name|default:"FLOCKCARE REGISTERED GAMEFOWL" }}</div>
+      <div class="cert-title">Official Certificate of Pedigree</div>
+      <div class="farm-meta">
+        {% if profile.location %}{{ profile.location }} &bull; {% endif %}
+        {% if profile.association_id %}Breeder Reg #: {{ profile.association_id }} &bull; {% endif %}
+        Issued: {{ today|date:"F j, Y" }}
+      </div>
+    </div>
+
+    <div class="bird-overview">
+      <div>
+        <div class="overview-row">
+          <span class="overview-label">Tag / Band #:</span>
+          <span class="overview-value">{{ bird.tag_number }}</span>
+        </div>
+        <div class="overview-row">
+          <span class="overview-label">Breed / Bloodline:</span>
+          <span class="overview-value">{{ bird.breed.name|default:"Pure / Cross" }}</span>
+        </div>
+        <div class="overview-row">
+          <span class="overview-label">Gender:</span>
+          <span class="overview-value">{{ bird.gender }}</span>
+        </div>
+        <div class="overview-row">
+          <span class="overview-label">Status:</span>
+          <span class="overview-value">{{ bird.status }}</span>
+        </div>
+        <div class="overview-row">
+          <span class="overview-label">Hatch Date:</span>
+          <span class="overview-value">{{ bird.birth_date|default:"Unrecorded" }}</span>
+        </div>
+      </div>
+      <div>
+        <div class="overview-row">
+          <span class="overview-label">Comb Type:</span>
+          <span class="overview-value">{{ bird.get_comb_type_display }}</span>
+        </div>
+        <div class="overview-row">
+          <span class="overview-label">Leg / Scale Color:</span>
+          <span class="overview-value">{{ bird.get_leg_color_display }}</span>
+        </div>
+        <div class="overview-row">
+          <span class="overview-label">Color / Feathering:</span>
+          <span class="overview-value">{{ bird.color|default:"Standard" }}</span>
+        </div>
+        <div class="overview-row">
+          <span class="overview-label">Weight:</span>
+          <span class="overview-value">{% if bird.weight_grams %}{{ bird.weight_grams }} grams{% else %}N/A{% endif %}</span>
+        </div>
+        <div class="overview-row">
+          <span class="overview-label">Fight Record:</span>
+          <span class="overview-value">{{ bird.wins }}W - {{ bird.losses }}L - {{ bird.draws }}D ({{ bird.win_rate }}% Win Rate)</span>
+        </div>
+      </div>
+    </div>
+
+    <h4 style="font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #475569; margin-bottom: 8px;">
+      3-Generation Lineage Tree
+    </h4>
+
+    <div class="tree-grid">
+      <!-- Generation 1: Parents -->
+      <div class="tree-column">
+        <div class="tree-card is-sire">
+          <div class="node-title">Sire (Father)</div>
+          <div class="node-tag">{{ sire.tag }}</div>
+          <div class="node-breed">{{ sire.breed }}</div>
+        </div>
+        <div class="tree-card is-dam">
+          <div class="node-title">Dam (Mother)</div>
+          <div class="node-tag">{{ dam.tag }}</div>
+          <div class="node-breed">{{ dam.breed }}</div>
+        </div>
+      </div>
+
+      <!-- Generation 2: Grandparents -->
+      <div class="tree-column">
+        <div class="tree-card is-sire">
+          <div class="node-title">Paternal Grand Sire</div>
+          <div class="node-tag">{{ gp_pat_sire.tag }}</div>
+          <div class="node-breed">{{ gp_pat_sire.breed }}</div>
+        </div>
+        <div class="tree-card is-dam">
+          <div class="node-title">Paternal Grand Dam</div>
+          <div class="node-tag">{{ gp_pat_dam.tag }}</div>
+          <div class="node-breed">{{ gp_pat_dam.breed }}</div>
+        </div>
+        <div class="tree-card is-sire">
+          <div class="node-title">Maternal Grand Sire</div>
+          <div class="node-tag">{{ gp_mat_sire.tag }}</div>
+          <div class="node-breed">{{ gp_mat_sire.breed }}</div>
+        </div>
+        <div class="tree-card is-dam">
+          <div class="node-title">Maternal Grand Dam</div>
+          <div class="node-tag">{{ gp_mat_dam.tag }}</div>
+          <div class="node-breed">{{ gp_mat_dam.breed }}</div>
+        </div>
+      </div>
+
+      <!-- Overview or Fight History -->
+      <div class="tree-column">
+        <div class="tree-card" style="border-left-color: #d97706;">
+          <div class="node-title">Recent Fight History</div>
+          {% if fights %}
+            <div style="font-size: 11px; margin-top: 6px;">
+              {% for f in fights %}
+                <div style="margin-bottom: 4px; display: flex; justify-content: space-between;">
+                  <span>{{ f.event_name|truncatechars:18 }}</span>
+                  <strong style="color: {% if f.result == 'win' %}#16a34a{% elif f.result == 'loss' %}#dc2626{% else %}#d97706{% endif %};">
+                    {{ f.get_result_display }}
+                  </strong>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div style="color: #94a3b8; font-size: 11px; margin-top: 6px;">
+              No sanctioned fights recorded yet.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="cert-footer">
+      <div>
+        <div class="signature-line"></div>
+        <div class="signature-label">Certified Breeder / Farm Manager</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+          {{ profile.farm_name|default:user.get_full_name|default:user.username }}
+        </div>
+      </div>
+      <div>
+        <div class="signature-line"></div>
+        <div class="signature-label">Date of Certification</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+          {{ today|date:"F j, Y" }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

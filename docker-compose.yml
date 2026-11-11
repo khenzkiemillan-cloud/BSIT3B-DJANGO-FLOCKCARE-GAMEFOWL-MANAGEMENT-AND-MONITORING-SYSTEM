@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/app
+      - media_volume:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=flockcare-insecure-dev-key-change-in-production
+      - USE_MYSQL=True
+      - DB_NAME=flockcare
+      - DB_USER=flockcare_user
+      - DB_PASSWORD=flockcare_pass
+      - DB_HOST=db
+      - DB_PORT=3306
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_DATABASE: flockcare
+      MYSQL_USER: flockcare_user
+      MYSQL_PASSWORD: flockcare_pass
+      MYSQL_ROOT_PASSWORD: root_secure_pass
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 5
+
+volumes:
+  db_data:
+  media_volume:

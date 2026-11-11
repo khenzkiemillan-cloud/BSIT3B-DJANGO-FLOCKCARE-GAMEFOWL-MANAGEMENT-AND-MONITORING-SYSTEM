@@ -1,0 +1,286 @@
+{% extends "theme/base.html" %}
+{% block content %}
+
+  <div class="page-header d-print-none mb-4" aria-label="Page header">
+    <div class="row align-items-center">
+      <div class="col">
+        <nav aria-label="Breadcrumb">
+          <ol class="dh-breadcrumb">
+            <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
+            <li class="is-current">Breeding Pens &amp; Hatching</li>
+          </ol>
+        </nav>
+        <div class="page-pretitle">Bloodline multiplication</div>
+        <h2 class="page-title mb-0">Breeding Pens &amp; Hatchery</h2>
+        <p class="dh-page-subtitle">
+          Manage broodcock and broodhen pairings, track egg clutches, and monitor fertility and hatchability rates.
+        </p>
+      </div>
+      <div class="col-12 col-md-auto">
+        <button type="button"
+                class="btn btn-primary"
+                data-bs-toggle="modal"
+                data-bs-target="#penModal">
+          <i class="fas fa-plus-circle me-2"></i>New Breeding Pen
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row row-cards">
+    {% for pen in pens %}
+      <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+              <span class="badge bg-primary-lt me-1">Pen {{ pen.pen_number }}</span>
+              <span class="badge {% if pen.status == 'active' %}bg-success text-white{% elif pen.status == 'resting' %}bg-warning text-white{% else %}bg-secondary text-white{% endif %}">
+                {{ pen.get_status_display }}
+              </span>
+            </div>
+            <button type="button" class="btn btn-sm btn-ghost-danger btn-icon" onclick="deletePen({{ pen.id }})" title="Delete pen">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </div>
+          <div class="card-body">
+            <div class="d-flex justify-content-around align-items-center text-center py-2 mb-3 bg-light-lt rounded">
+              <div>
+                <span class="badge bg-blue text-white mb-1"><i class="fas fa-mars me-1"></i>Sire</span>
+                <div class="fw-bold fs-4">{{ pen.sire.tag_number }}</div>
+                <div class="text-muted small">{{ pen.sire.breed.name|default:"Pure" }}</div>
+              </div>
+              <div class="text-muted fs-3"><i class="fas fa-heart text-danger"></i></div>
+              <div>
+                <span class="badge bg-pink text-white mb-1"><i class="fas fa-venus me-1"></i>Dam</span>
+                <div class="fw-bold fs-4">{{ pen.dam.tag_number }}</div>
+                <div class="text-muted small">{{ pen.dam.breed.name|default:"Pure" }}</div>
+              </div>
+            </div>
+
+            <div class="small text-muted mb-3">
+              <div><i class="far fa-calendar me-1"></i>Paired: <strong>{{ pen.date_paired|date:"M j, Y" }}</strong></div>
+              {% if pen.notes %}<div><i class="fas fa-info-circle me-1"></i>{{ pen.notes }}</div>{% endif %}
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-semibold small text-uppercase text-muted">Clutches ({{ pen.clutches.count }})</span>
+              <button type="button" class="btn btn-xs btn-outline-primary" onclick="openClutchModal({{ pen.id }})">
+                <i class="fas fa-egg me-1"></i>Add Clutch
+              </button>
+            </div>
+
+            <div class="list-group list-group-flush border-top">
+              {% for clutch in pen.clutches.all %}
+                <div class="list-group-item px-0 py-2 small d-flex justify-content-between align-items-center">
+                  <div>
+                    <span class="fw-bold">Clutch #{{ clutch.clutch_number|default:forloop.counter }}</span>
+                    <span class="text-muted d-block">{{ clutch.date_started|date:"M j" }} &bull; {{ clutch.eggs_collected }} eggs &bull; {{ clutch.hatched_count }} hatched</span>
+                  </div>
+                  <span class="badge bg-success-lt font-monospace">{{ clutch.hatchability_rate }}%</span>
+                </div>
+              {% empty %}
+                <div class="py-3 text-center text-muted small">No egg clutches recorded yet.</div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="col-12">
+        <div class="empty py-5 text-center card">
+          <div class="empty-icon mb-3"><i class="fas fa-egg fa-3x text-muted"></i></div>
+          <p class="empty-title h3">No Breeding Pens Active</p>
+          <p class="empty-subtitle text-muted">Pair your top broodcocks and broodhens to begin logging clutches and tracking bloodlines.</p>
+          <div class="empty-action mt-3">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#penModal">
+              <i class="fas fa-plus-circle me-2"></i>Create First Breeding Pen
+            </button>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Modal: Add Breeding Pen -->
+  <div class="modal modal-blur fade" id="penModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form id="penForm">
+          {% csrf_token %}
+          <input type="hidden" name="id" id="pen_id">
+          <div class="modal-header">
+            <h5 class="modal-title">New Breeding Pen Pairing</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div id="penError" class="alert alert-danger d-none"></div>
+            <div class="mb-3">
+              <label class="form-label required">Pen number / identifier</label>
+              <input type="text" name="pen_number" id="pen_number" class="form-control" placeholder="e.g. Pen 101" required>
+            </div>
+            <div class="row g-3 mb-3">
+              <div class="col-6">
+                <label class="form-label required">Broodcock / Stag (Sire)</label>
+                <select name="sire" id="pen_sire" class="form-select" required>
+                  <option value="">Select Sire...</option>
+                  {% for c in cocks %}
+                    <option value="{{ c.id }}">{{ c.tag_number }} ({{ c.breed.name|default:"Unclassified" }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label required">Broodhen / Pullet (Dam)</label>
+                <select name="dam" id="pen_dam" class="form-select" required>
+                  <option value="">Select Dam...</option>
+                  {% for h in hens %}
+                    <option value="{{ h.id }}">{{ h.tag_number }} ({{ h.breed.name|default:"Unclassified" }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="row g-3 mb-3">
+              <div class="col-6">
+                <label class="form-label required">Date paired</label>
+                <input type="date" name="date_paired" id="pen_date_paired" class="form-control" value="{% now 'Y-m-d' %}" required>
+              </div>
+              <div class="col-6">
+                <label class="form-label required">Status</label>
+                <select name="status" id="pen_status" class="form-select">
+                  <option value="active">Active Pairing</option>
+                  <option value="resting">Resting</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Notes / Expected bloodline</label>
+              <textarea name="notes" id="pen_notes" class="form-control" rows="2" placeholder="e.g. Crossing Sweater male on Kelso female for 2027 derby season."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Breeding Pen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Clutch -->
+  <div class="modal modal-blur fade" id="clutchModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form id="clutchForm">
+          {% csrf_token %}
+          <input type="hidden" name="pen_id" id="clutch_pen_id">
+          <div class="modal-header">
+            <h5 class="modal-title">Record Egg Clutch &amp; Hatch</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div id="clutchError" class="alert alert-danger d-none"></div>
+            <div class="row g-3 mb-3">
+              <div class="col-6">
+                <label class="form-label">Clutch # / Batch</label>
+                <input type="text" name="clutch_number" class="form-control" placeholder="e.g. C-01">
+              </div>
+              <div class="col-6">
+                <label class="form-label required">Date started / Laid</label>
+                <input type="date" name="date_started" class="form-control" value="{% now 'Y-m-d' %}" required>
+              </div>
+            </div>
+            <div class="row g-3 mb-3">
+              <div class="col-4">
+                <label class="form-label">Eggs collected</label>
+                <input type="number" name="eggs_collected" class="form-control" min="0" value="0">
+              </div>
+              <div class="col-4">
+                <label class="form-label">Fertile eggs</label>
+                <input type="number" name="fertile_eggs" class="form-control" min="0" value="0">
+              </div>
+              <div class="col-4">
+                <label class="form-label">Chicks hatched</label>
+                <input type="number" name="hatched_count" class="form-control" min="0" value="0">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Hatch date (approx 21 days from incubation)</label>
+              <input type="date" name="hatch_date" class="form-control">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Notes (wing band numbers, incubator settings)</label>
+              <textarea name="notes" class="form-control" rows="2" placeholder="e.g. Wing banded 101 to 108. Strong vigor."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Clutch</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function openClutchModal(penId) {
+    document.getElementById('clutch_pen_id').value = penId;
+    new bootstrap.Modal(document.getElementById('clutchModal')).show();
+  }
+
+  document.getElementById('penForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch("{% url 'info:breeding_pen_save_ajax' %}", {
+      method: "POST",
+      body: formData,
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'success') {
+        window.location.reload();
+      } else {
+        document.getElementById('penError').textContent = data.error || 'Failed to save pen.';
+        document.getElementById('penError').classList.remove('d-none');
+      }
+    });
+  });
+
+  document.getElementById('clutchForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch("{% url 'info:clutch_save_ajax' %}", {
+      method: "POST",
+      body: formData,
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'success') {
+        window.location.reload();
+      } else {
+        document.getElementById('clutchError').textContent = data.error || 'Failed to save clutch.';
+        document.getElementById('clutchError').classList.remove('d-none');
+      }
+    });
+  });
+
+  function deletePen(id) {
+    if (!confirm('Are you sure you want to delete this breeding pen?')) return;
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    fetch(`/info/ajax/breeding/delete/${id}/`, {
+      method: "POST",
+      body: formData,
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'success') window.location.reload();
+    });
+  }
+</script>
+{% endblock %}

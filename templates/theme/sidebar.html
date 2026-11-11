@@ -6,8 +6,8 @@
           <i class="fa-solid fa-shield-halved"></i>
         </span>
         <span class="lh-1">
-          <span class="dh-brand-name">Project<span class="text-warning">V3</span></span>
-          <span class="dh-brand-sub">Management System</span>
+          <span class="dh-brand-name">Flock<span class="text-warning">Care</span></span>
+          <span class="dh-brand-sub">Gamefowl Management System</span>
         </span>
       </a>
     </div>
@@ -53,11 +53,47 @@
         {% endif %}
 
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.app_name == 'info' %}active{% endif %}" href="{% url 'info:info_list' %}" data-turbo-frame="main-content">
+          <a class="nav-link {% if request.resolver_match.app_name == 'info' and request.resolver_match.url_name != 'health_list' and request.resolver_match.url_name != 'medicine_list' and request.GET.status != 'Conditioning' %}active{% endif %}" href="{% url 'info:info_list' %}" data-turbo-frame="main-content">
             <span class="nav-link-icon d-md-none d-lg-inline-block">
               <i class="nav-icon fas fa-dove"></i>
             </span>
             <span class="nav-link-title">Flock</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.app_name == 'info' and request.resolver_match.url_name != 'health_list' and request.resolver_match.url_name != 'medicine_list' and request.resolver_match.url_name != 'breeding_list' and request.GET.status == 'Conditioning' %}active{% endif %}" href="{% url 'info:info_list' %}?status=Conditioning" data-turbo-frame="main-content">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-dumbbell"></i>
+            </span>
+            <span class="nav-link-title">Conditioning</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'breeding_list' %}active{% endif %}" href="{% url 'info:breeding_list' %}" data-turbo-frame="main-content">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-egg"></i>
+            </span>
+            <span class="nav-link-title">Breeding</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'health_list' %}active{% endif %}" href="{% url 'info:health_list' %}" data-turbo-frame="main-content">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-heart-pulse"></i>
+            </span>
+            <span class="nav-link-title">Health</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'medicine_list' %}active{% endif %}" href="{% url 'info:medicine_list' %}" data-turbo-frame="main-content">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-prescription-bottle-medical"></i>
+            </span>
+            <span class="nav-link-title">Medicine</span>
           </a>
         </li>
 
@@ -74,12 +110,12 @@
 
         <li class="nav-item mt-auto dh-nav-sidebar-footer">
           <div class="dh-user-card">
-            <a href="{% if user.is_superuser %}{% url 'users:user_list' %}{% else %}{% url 'dashboard' %}{% endif %}" class="d-flex align-items-center gap-2 text-decoration-none text-white min-w-0 w-100" data-turbo-frame="main-content">
+            <a href="{% url 'users:profile' %}" class="d-flex align-items-center gap-2 text-decoration-none text-white min-w-0 w-100" data-turbo-frame="main-content" title="View Farm Profile & Settings">
               <span class="dh-avatar">{{ user.username|first|upper }}</span>
               <span class="min-w-0 flex-grow-1">
                 <span class="dh-user-name">{{ user.username }}</span>
                 <span class="dh-user-role">
-                  {% if user.is_superuser %}Administrator{% elif user.is_authenticated %}Instructor{% endif %}
+                  {% if user.is_superuser %}Administrator{% elif user.is_authenticated %}Breeder{% endif %}
                 </span>
               </span>
             </a>

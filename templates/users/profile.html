@@ -1,0 +1,142 @@
+{% extends "theme/base.html" %}
+{% block content %}
+
+  <div class="page-header d-print-none mb-4" aria-label="Page header">
+    <div class="row align-items-center">
+      <div class="col">
+        <nav aria-label="Breadcrumb">
+          <ol class="dh-breadcrumb">
+            <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
+            <li class="is-current">Profile &amp; Farm Settings</li>
+          </ol>
+        </nav>
+        <div class="page-pretitle">Account</div>
+        <h2 class="page-title mb-0">Farm Profile &amp; Settings</h2>
+        <p class="dh-page-subtitle">
+          Manage your farm identity, breeder association credentials, and security settings.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-body text-center p-4">
+          <div class="dh-avatar mb-3 mx-auto" style="width: 72px; height: 72px; font-size: 2rem;">
+            {{ user.username|first|upper }}
+          </div>
+          <h3 class="card-title mb-1">{{ user.get_full_name|default:user.username }}</h3>
+          <div class="text-muted mb-2">@{{ user.username }}</div>
+          {% if profile.farm_name %}
+            <span class="badge bg-primary-lt mb-2"><i class="fas fa-landmark me-1"></i>{{ profile.farm_name }}</span>
+          {% endif %}
+          <div class="text-muted small">
+            Member since {{ user.date_joined|date:"F Y" }}
+          </div>
+        </div>
+        <div class="card-footer bg-light-lt">
+          <div class="d-flex justify-content-between align-items-center small text-muted">
+            <span>Role</span>
+            <span class="badge {% if user.is_superuser %}bg-red text-white{% else %}bg-primary text-white{% endif %}">
+              {% if user.is_superuser %}Administrator{% else %}Breeder{% endif %}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <form method="POST" action="{% url 'users:profile' %}">
+        {% csrf_token %}
+
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-landmark text-primary me-2"></i>Farm &amp; Breeder Identity</h3>
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Farm name</label>
+                <input type="text" name="farm_name" class="form-control" value="{{ profile.farm_name }}" placeholder="e.g. Sunrise Gamefarm">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Breeder association ID</label>
+                <input type="text" name="association_id" class="form-control" value="{{ profile.association_id }}" placeholder="e.g. FIGBA / RGBA / Club ID">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Farm location / Province</label>
+                <input type="text" name="location" class="form-control" value="{{ profile.location }}" placeholder="e.g. Lipa City, Batangas">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Contact phone number</label>
+                <input type="text" name="contact_number" class="form-control" value="{{ profile.contact_number }}" placeholder="e.g. +63 912 345 6789">
+              </div>
+              <div class="col-12">
+                <label class="form-label">Farm bio / Specialization</label>
+                <textarea name="bio" class="form-control" rows="2" placeholder="e.g. Specializing in pure Kelso, Sweaters, and Roundheads since 2018.">{{ profile.bio }}</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-user text-primary me-2"></i>Personal Details</h3>
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label required">First name</label>
+                <input type="text" name="first_name" class="form-control" value="{{ user.first_name }}" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label required">Last name</label>
+                <input type="text" name="last_name" class="form-control" value="{{ user.last_name }}" required>
+              </div>
+              <div class="col-12">
+                <label class="form-label required">Email address</label>
+                <input type="email" name="email" class="form-control" value="{{ user.email }}" required>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-shield-halved text-primary me-2"></i>Security &amp; Password</h3>
+          </div>
+          <div class="card-body">
+            <p class="text-muted small">Leave blank if you do not wish to change your password.</p>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">New password</label>
+                <input type="password" name="new_password" class="form-control" autocomplete="new-password">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Confirm new password</label>
+                <input type="password" name="confirm_password" class="form-control" autocomplete="new-password">
+              </div>
+            </div>
+          </div>
+          <div class="card-footer text-end">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save me-2"></i>Save Changes
+            </button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+{% endblock %}

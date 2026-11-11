@@ -6,14 +6,14 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from apps.core.scoping import scoped_flock_members
-from apps.info.models import HealthRecord
+from apps.info.models import HealthRecord, Medicine
 
 User = get_user_model()
 MAX_FAILED_ATTEMPTS = 5
@@ -211,6 +211,13 @@ def home(request):
     )
     overdue_records = overdue_qs.select_related('bird').order_by('next_due_date')[:5]
 
+    medicine_expiry_cutoff = today + timedelta(days=30)
+    medicine_alert_count = Medicine.objects.filter(user=request.user).filter(
+        Q(stock_quantity__lte=F('low_stock_threshold')) |
+        Q(expiration_date__lt=today) |
+        Q(expiration_date__gte=today, expiration_date__lte=medicine_expiry_cutoff)
+    ).count()
+
     context = {
         'total_birds': total_birds,
         'active_birds': active_birds,
@@ -231,6 +238,7 @@ def home(request):
         'upcoming_count': upcoming_qs.count(),
         'overdue_records': overdue_records,
         'overdue_count': overdue_qs.count(),
+        'medicine_alert_count': medicine_alert_count,
         'today': today,
     }
     return render(request, 'home.html', context)

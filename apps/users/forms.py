@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
+from .models import UserProfile
 
 
 class UserForm(forms.ModelForm):
@@ -45,3 +46,9 @@ class UserForm(forms.ModelForm):
             user.save()
 
         return user
+
+
+class UserProfileForm(forms.ModelForm):
+    class Meta:
+        model = UserProfile
+        fields = ['farm_name', 'contact_number', 'location', 'association_id', 'bio']

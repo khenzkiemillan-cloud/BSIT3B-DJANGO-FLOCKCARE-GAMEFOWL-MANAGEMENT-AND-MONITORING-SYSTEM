@@ -21,6 +21,9 @@
       </div>
       <div class="col-12 col-md-auto">
         <div class="btn-list">
+          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#importModal">
+            <i class="fas fa-file-import me-2"></i>Import CSV
+          </button>
           <a href="{% url 'info:export_flock_csv' %}" class="btn btn-outline-secondary">
             <i class="fas fa-file-csv me-2"></i>Export CSV
           </a>
@@ -126,10 +129,36 @@
       </div>
       <span class="badge bg-primary-lt text-primary ms-auto">{{ members.paginator.count }} result{{ members.paginator.count|pluralize }}</span>
     </div>
+
+    <!-- Batch action toolbar -->
+    <div id="batchActionBar" class="card-header bg-primary-lt py-2 d-none">
+      <div class="d-flex align-items-center gap-2 flex-wrap w-100">
+        <span class="fw-semibold text-primary"><span id="selectedCount">0</span> birds selected</span>
+        <div class="btn-list ms-auto">
+          <div class="dropdown d-inline-block">
+            <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+              Update Status
+            </button>
+            <div class="dropdown-menu">
+              <a class="dropdown-item" href="#" onclick="applyBatchStatus('Active')">Active</a>
+              <a class="dropdown-item" href="#" onclick="applyBatchStatus('Conditioning')">Conditioning</a>
+              <a class="dropdown-item" href="#" onclick="applyBatchStatus('Broodcock')">Broodcock</a>
+              <a class="dropdown-item" href="#" onclick="applyBatchStatus('Broodhen')">Broodhen</a>
+              <a class="dropdown-item" href="#" onclick="applyBatchStatus('Retired')">Retired</a>
+            </div>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="applyBatchDelete()">
+            <i class="fas fa-trash-alt me-1"></i>Delete Selected
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="table-responsive">
       <table class="table table-vcenter table-hover card-table text-nowrap dh-stack-table" id="flockTable">
         <thead>
           <tr>
+            <th class="w-1"><input type="checkbox" id="selectAllCheckbox" class="form-check-input"></th>
             <th>Tag</th>
             <th>Breed</th>
             <th>Gender</th>
@@ -143,9 +172,16 @@
         <tbody id="flockTableBody">
           {% for bird in members %}
           <tr data-row-id="{{ bird.id }}">
+            <td>
+              <input type="checkbox" class="form-check-input flock-checkbox" value="{{ bird.id }}">
+            </td>
             <td class="fw-semibold" data-label="Tag">
               <span class="dh-table-tag">
+                {% if bird.image %}
+                <img src="{{ bird.image.url }}" alt="{{ bird.tag_number }}" class="rounded me-2" style="width: 28px; height: 28px; object-fit: cover;">
+                {% else %}
                 <span class="dh-table-avatar"><i class="fas fa-dove"></i></span>
+                {% endif %}
                 <span class="dh-tag">{{ bird.tag_number }}</span>
               </span>
             </td>
@@ -169,6 +205,10 @@
                 <span class="dh-record-wins">{{ bird.wins }}W</span>
                 <span class="dh-record-sep">–</span>
                 <span class="dh-record-losses">{{ bird.losses }}L</span>
+                {% if bird.draws %}
+                <span class="dh-record-sep">–</span>
+                <span class="text-muted">{{ bird.draws }}D</span>
+                {% endif %}
               </span>
             </td>
             <td data-label="Actions">
@@ -183,15 +223,42 @@
                         data-breed="{{ bird.breed_id|default:'' }}"
                         data-gender="{{ bird.gender }}"
                         data-status="{{ bird.status }}"
+                        data-comb-type="{{ bird.comb_type }}"
+                        data-leg-color="{{ bird.leg_color }}"
+                        data-color="{{ bird.color|default:'' }}"
+                        data-cage-number="{{ bird.cage_number|default:'' }}"
                         data-birth-date="{{ bird.birth_date|date:'Y-m-d' }}"
                         data-weight="{{ bird.weight_grams|default:'' }}"
                         data-wins="{{ bird.wins }}"
                         data-losses="{{ bird.losses }}"
+                        data-draws="{{ bird.draws }}"
                         data-sire="{{ bird.sire|default:'' }}"
                         data-dam="{{ bird.dam|default:'' }}"
                         title="Edit"
                         aria-label="Edit {{ bird.tag_number }}">
                   <i class="fas fa-edit text-primary"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#fightModal"
+                        data-id="{{ bird.id }}"
+                        data-tag-number="{{ bird.tag_number }}"
+                        data-fights-url="{% url 'info:fight_records_ajax' bird.id %}"
+                        title="Fight history"
+                        aria-label="Fight history for {{ bird.tag_number }}">
+                  <i class="fas fa-trophy text-warning"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#weightModal"
+                        data-id="{{ bird.id }}"
+                        data-tag-number="{{ bird.tag_number }}"
+                        data-weights-url="{% url 'info:weight_logs_ajax' bird.id %}"
+                        title="Weight / Conditioning logs"
+                        aria-label="Weight logs for {{ bird.tag_number }}">
+                  <i class="fas fa-scale-balanced text-secondary"></i>
                 </button>
                 <button type="button"
                         class="btn btn-ghost-secondary btn-icon btn-sm"
@@ -215,6 +282,13 @@
                         aria-label="Pedigree for {{ bird.tag_number }}">
                   <i class="fas fa-sitemap text-info"></i>
                 </button>
+                <a href="{% url 'info:pedigree_certificate' bird.id %}"
+                   target="_blank"
+                   class="btn btn-ghost-secondary btn-icon btn-sm"
+                   title="Print Pedigree Certificate"
+                   aria-label="Pedigree Certificate for {{ bird.tag_number }}">
+                  <i class="fas fa-certificate text-azure"></i>
+                </a>
                 <button type="button"
                         class="btn btn-ghost-secondary btn-icon btn-sm"
                         data-bs-toggle="modal"
@@ -304,21 +378,25 @@
         <h5 class="modal-title" id="memberModalTitle">Add flock member</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form id="memberForm">
+      <form id="memberForm" enctype="multipart/form-data">
         {% csrf_token %}
         <input type="hidden" name="id" id="member_id">
         <div class="modal-body">
           <div id="memberFormError" class="alert alert-danger d-none"></div>
           <div class="row g-3">
             <div class="col-12">
-              <div class="dh-form-section-title">Bird details</div>
+              <div class="dh-form-section-title">Bird identity</div>
             </div>
             <div class="col-md-6">
-              <label class="form-label required">Tag number</label>
+              <label class="form-label required">Tag / Band number</label>
               <input type="text" name="tag_number" id="member_tag_number" class="form-control" maxlength="50" required>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Breed</label>
+              <label class="form-label">Cage / Pen / Cord #</label>
+              <input type="text" name="cage_number" id="member_cage_number" class="form-control" maxlength="50" placeholder="e.g. Cord 12 or Pen B-4">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Breed / Bloodline</label>
               <select name="breed" id="member_breed" class="form-select">
                 <option value="">— Select breed —</option>
                 {% for breed in breeds %}
@@ -355,31 +433,75 @@
               </select>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Birth date</label>
+              <label class="form-label">Hatch date</label>
               <input type="date" name="birth_date" id="member_birth_date" class="form-control">
             </div>
             <div class="col-md-6">
               <label class="form-label">Weight (grams)</label>
               <input type="number" name="weight_grams" id="member_weight" class="form-control" min="0" step="1">
             </div>
-            <div class="col-md-6">
+
+            <div class="col-12">
+              <div class="dh-form-section-title mt-2">Physical conformation &amp; Photo</div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Comb type</label>
+              <select name="comb_type" id="member_comb_type" class="form-select">
+                <option value="Pea">Pea Comb</option>
+                <option value="Straight">Straight / Single</option>
+                <option value="Strawberry">Strawberry</option>
+                <option value="Walnut">Walnut</option>
+                <option value="Cushion">Cushion</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Leg / Scale color</label>
+              <select name="leg_color" id="member_leg_color" class="form-select">
+                <option value="Yellow">Yellow</option>
+                <option value="Green">Green</option>
+                <option value="White">White</option>
+                <option value="Blue/Slate">Blue / Slate</option>
+                <option value="Lead">Lead / Dark</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Color / Plumage</label>
+              <input type="text" name="color" id="member_color" class="form-control" placeholder="e.g. Red, Grey, Dom">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Photo upload</label>
+              <input type="file" name="image" id="member_image" class="form-control" accept="image/*">
+              <small class="form-hint">Upload bird picture (PNG, JPG, WebP up to 5 MB).</small>
+            </div>
+
+            <div class="col-12">
+              <div class="dh-form-section-title mt-2">Fight Record</div>
+            </div>
+            <div class="col-md-4">
               <label class="form-label">Wins</label>
               <input type="number" name="wins" id="member_wins" class="form-control" min="0" value="0">
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label">Losses</label>
               <input type="number" name="losses" id="member_losses" class="form-control" min="0" value="0">
             </div>
+            <div class="col-md-4">
+              <label class="form-label">Draws (Tinabla)</label>
+              <input type="number" name="draws" id="member_draws" class="form-control" min="0" value="0">
+            </div>
+
             <div class="col-12">
-              <div class="dh-form-section-title mt-2">Breeding</div>
+              <div class="dh-form-section-title mt-2">Lineage</div>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Sire (tag)</label>
-              <input type="text" name="sire" id="member_sire" class="form-control" maxlength="50">
+              <label class="form-label">Sire (tag / bloodline)</label>
+              <input type="text" name="sire" id="member_sire" class="form-control" maxlength="50" placeholder="e.g. K-101 or Pure Kelso">
             </div>
             <div class="col-md-6">
-              <label class="form-label">Dam (tag)</label>
-              <input type="text" name="dam" id="member_dam" class="form-control" maxlength="50">
+              <label class="form-label">Dam (tag / bloodline)</label>
+              <input type="text" name="dam" id="member_dam" class="form-control" maxlength="50" placeholder="e.g. H-204 or Sweeter Hen">
             </div>
           </div>
         </div>
@@ -543,6 +665,184 @@
   </div>
 </div>
 
+<!-- CSV Import Modal -->
+<div class="modal modal-blur fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form action="{% url 'info:import_flock_csv' %}" method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-header">
+          <span class="dh-modal-icon is-primary"><i class="fas fa-file-import"></i></span>
+          <h5 class="modal-title">Import Flock from CSV</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Upload a CSV spreadsheet with bird records. If a tag number already exists in your flock, its details will be updated.
+          </p>
+          <div class="mb-3">
+            <label class="form-label required">Choose CSV File</label>
+            <input type="file" name="csv_file" class="form-control" accept=".csv" required>
+          </div>
+          <div class="alert alert-info py-2 small mb-0">
+            <strong>Expected Columns:</strong><br>
+            <code>Tag Number, Breed, Gender, Status, Birth Date, Weight (g), Wins, Losses, Draws, Comb Type, Leg Color, Color, Cage Number, Sire, Dam</code>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-upload me-1"></i>Upload &amp; Import</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Fight Records Modal -->
+<div class="modal modal-blur fade" id="fightModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="dh-modal-icon is-warning"><i class="fas fa-trophy"></i></span>
+        <h5 class="modal-title">Fight History — <span id="fightBirdTag"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="fightError" class="alert alert-danger d-none"></div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-light-lt rounded">
+          <div>
+            <div class="text-muted small text-uppercase">Career Record</div>
+            <div class="h3 mb-0" id="fightCareerRecord">0W – 0L – 0D</div>
+          </div>
+          <div class="text-end">
+            <div class="text-muted small text-uppercase">Win Rate</div>
+            <div class="h3 mb-0 text-success" id="fightWinRate">0%</div>
+          </div>
+        </div>
+
+        <div class="dh-form-section-title mb-2">Sanctioned Fights</div>
+        <div id="fightRecordsList" class="list-group list-group-flush mb-4" style="max-height: 200px; overflow-y: auto;">
+          <div class="list-group-item text-muted">Loading fights…</div>
+        </div>
+
+        <div class="dh-form-section-title mb-3">Log a Match</div>
+        <form id="fightForm">
+          {% csrf_token %}
+          <input type="hidden" name="bird_id" id="fight_bird_id">
+          <input type="hidden" name="record_id" id="fight_record_id">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label required">Event / Derby name</label>
+              <input type="text" name="event_name" id="fight_event_name" class="form-control" placeholder="e.g. 4-Cock Derby or Local Hackfight" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Fight date</label>
+              <input type="date" name="fight_date" id="fight_date" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Match result</label>
+              <select name="result" id="fight_result" class="form-select" required>
+                <option value="win">Win</option>
+                <option value="loss">Loss</option>
+                <option value="draw">Draw / Tinabla</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Fight weight (grams)</label>
+              <input type="number" name="weight_grams" id="fight_weight" class="form-control" min="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Opponent / Farm</label>
+              <input type="text" name="opponent" id="fight_opponent" class="form-control" placeholder="e.g. Firebird / Tag 55">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Gaff / Blade spec</label>
+              <input type="text" name="gaff_type" id="fight_gaff" class="form-control" placeholder="e.g. 2.5 inch high-blade slasher">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Duration (seconds)</label>
+              <input type="number" name="duration_seconds" id="fight_duration" class="form-control" min="0" placeholder="e.g. 45">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Fight video URL</label>
+              <input type="url" name="video_url" id="fight_video" class="form-control" placeholder="https://youtube.com/watch?v=...">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Fight analysis &amp; notes</label>
+              <textarea name="notes" id="fight_notes" class="form-control" rows="2" placeholder="e.g. Fast off the cords, delivered early body cut."></textarea>
+            </div>
+          </div>
+          <div class="mt-3 text-end">
+            <button type="submit" class="btn btn-warning" id="fightSubmitBtn">
+              <i class="fas fa-plus-circle me-1"></i>Save Fight Record
+            </button>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Weight & Conditioning Modal -->
+<div class="modal modal-blur fade" id="weightModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="dh-modal-icon is-secondary"><i class="fas fa-scale-balanced"></i></span>
+        <h5 class="modal-title">Conditioning Weight Logs — <span id="weightBirdTag"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="weightError" class="alert alert-danger d-none"></div>
+
+        <div id="weightLogsList" class="list-group list-group-flush mb-4" style="max-height: 220px; overflow-y: auto;">
+          <div class="list-group-item text-muted">Loading weight entries…</div>
+        </div>
+
+        <div class="dh-form-section-title mb-2">Log Daily Weight</div>
+        <form id="weightForm">
+          {% csrf_token %}
+          <input type="hidden" name="bird_id" id="weight_bird_id">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label required">Date</label>
+              <input type="date" name="date" id="weight_date" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label required">Time of day</label>
+              <select name="time_of_day" id="weight_time" class="form-select form-select-sm">
+                <option value="morning">Morning (Empty crop)</option>
+                <option value="evening">Evening (After feed)</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label required">Weight (grams)</label>
+              <input type="number" name="weight_grams" id="weight_grams_input" class="form-control form-control-sm" min="0" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Notes</label>
+              <input type="text" name="notes" id="weight_notes_input" class="form-control form-control-sm" placeholder="e.g. Moisture drop normal">
+            </div>
+          </div>
+          <div class="mt-3 text-end">
+            <button type="submit" class="btn btn-sm btn-primary">
+              <i class="fas fa-plus me-1"></i>Record Weight
+            </button>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   const memberModalEl = document.getElementById('memberModal');
@@ -622,6 +922,11 @@
     document.getElementById('member_new_breed').value = '';
     document.getElementById('member_wins').value = '0';
     document.getElementById('member_losses').value = '0';
+    document.getElementById('member_draws').value = '0';
+    document.getElementById('member_comb_type').value = 'Pea';
+    document.getElementById('member_leg_color').value = 'Yellow';
+    document.getElementById('member_color').value = '';
+    document.getElementById('member_cage_number').value = '';
     document.getElementById('memberModalTitle').textContent = 'Add flock member';
 
     const button = event.relatedTarget;
@@ -640,6 +945,11 @@
     document.getElementById('member_weight').value = button.dataset.weight || '';
     document.getElementById('member_wins').value = button.dataset.wins || '0';
     document.getElementById('member_losses').value = button.dataset.losses || '0';
+    document.getElementById('member_draws').value = button.dataset.draws || '0';
+    document.getElementById('member_comb_type').value = button.dataset.combType || 'Pea';
+    document.getElementById('member_leg_color').value = button.dataset.legColor || 'Yellow';
+    document.getElementById('member_color').value = button.dataset.color || '';
+    document.getElementById('member_cage_number').value = button.dataset.cageNumber || '';
     document.getElementById('member_sire').value = button.dataset.sire || '';
     document.getElementById('member_dam').value = button.dataset.dam || '';
   });
@@ -955,6 +1265,235 @@
         showError(pedigreeErrorBox, error.message);
       });
   });
+
+  // --- Batch Actions ---
+  const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+  const batchActionBar = document.getElementById('batchActionBar');
+  const selectedCount = document.getElementById('selectedCount');
+
+  function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.flock-checkbox:checked')).map(cb => cb.value);
+  }
+
+  function updateBatchBar() {
+    const ids = getSelectedIds();
+    if (selectedCount) selectedCount.textContent = ids.length;
+    if (batchActionBar) {
+      if (ids.length > 0) batchActionBar.classList.remove('d-none');
+      else batchActionBar.classList.add('d-none');
+    }
+  }
+
+  if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener('change', function () {
+      document.querySelectorAll('.flock-checkbox').forEach(cb => cb.checked = this.checked);
+      updateBatchBar();
+    });
+  }
+
+  document.querySelectorAll('.flock-checkbox').forEach(cb => {
+    cb.addEventListener('change', updateBatchBar);
+  });
+
+  window.applyBatchStatus = function (status) {
+    const ids = getSelectedIds();
+    if (!ids.length) return;
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrfToken(memberForm));
+    formData.append('action', 'update_status');
+    formData.append('status', status);
+    ids.forEach(id => formData.append('ids[]', id));
+
+    fetch("{% url 'info:batch_action_ajax' %}", { method: 'POST', body: formData })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'success') refresh();
+        else alert(data.error);
+      });
+  };
+
+  window.applyBatchDelete = function () {
+    const ids = getSelectedIds();
+    if (!ids.length) return;
+    if (!confirm(`Are you sure you want to delete ${ids.length} selected birds? This cannot be undone.`)) return;
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrfToken(memberForm));
+    formData.append('action', 'delete');
+    ids.forEach(id => formData.append('ids[]', id));
+
+    fetch("{% url 'info:batch_action_ajax' %}", { method: 'POST', body: formData })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'success') refresh();
+        else alert(data.error);
+      });
+  };
+
+  // --- Fight Records ---
+  const fightModalEl = document.getElementById('fightModal');
+  const fightForm = document.getElementById('fightForm');
+  const fightErrorBox = document.getElementById('fightError');
+  let activeFightBirdId = null;
+
+  function loadFightRecords(birdId) {
+    const list = document.getElementById('fightRecordsList');
+    list.innerHTML = '<div class="list-group-item text-muted">Loading fights…</div>';
+
+    fetch(`/info/ajax/fight/${birdId}/`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('fightCareerRecord').textContent = `${data.wins}W – ${data.losses}L – ${data.draws}D`;
+        document.getElementById('fightWinRate').textContent = `${data.win_rate}%`;
+
+        if (!data.data || !data.data.length) {
+          list.innerHTML = '<div class="list-group-item text-muted">No sanctioned fights recorded yet.</div>';
+          return;
+        }
+
+        list.innerHTML = data.data.map(f => {
+          const badgeClass = f.result === 'win' ? 'bg-success text-white' : (f.result === 'loss' ? 'bg-danger text-white' : 'bg-warning text-white');
+          return `
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                <span class="badge ${badgeClass} me-1">${f.result_display}</span>
+                <strong>${escapeHtml(f.event_name)}</strong>
+                <span class="text-muted small"> &bull; ${f.fight_date} ${f.opponent ? '&bull; vs ' + escapeHtml(f.opponent) : ''}</span>
+                ${f.notes ? `<div class="text-muted small mt-1">${escapeHtml(f.notes)}</div>` : ''}
+              </div>
+              <button type="button" class="btn btn-sm btn-ghost-danger btn-icon" onclick="deleteFight(${f.id})">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </div>
+          `;
+        }).join('');
+      });
+  }
+
+  if (fightModalEl) {
+    fightModalEl.addEventListener('show.bs.modal', function (event) {
+      const button = event.relatedTarget;
+      activeFightBirdId = button.dataset.id;
+      document.getElementById('fightBirdTag').textContent = button.dataset.tagNumber || '';
+      document.getElementById('fight_bird_id').value = activeFightBirdId;
+      document.getElementById('fight_date').value = new Date().toISOString().slice(0, 10);
+      fightForm.reset();
+      document.getElementById('fight_bird_id').value = activeFightBirdId;
+      clearError(fightErrorBox);
+      loadFightRecords(activeFightBirdId);
+    });
+
+    fightForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      clearError(fightErrorBox);
+      const submitBtn = document.getElementById('fightSubmitBtn');
+      submitBtn.disabled = true;
+
+      fetch("{% url 'info:fight_record_save_ajax' %}", {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken(fightForm) },
+        body: new FormData(fightForm)
+      })
+      .then(async r => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Failed to save fight.');
+        return d;
+      })
+      .then(() => {
+        fightForm.reset();
+        document.getElementById('fight_bird_id').value = activeFightBirdId;
+        loadFightRecords(activeFightBirdId);
+      })
+      .catch(err => showError(fightErrorBox, err.message))
+      .finally(() => submitBtn.disabled = false);
+    });
+  }
+
+  window.deleteFight = function (id) {
+    if (!confirm('Delete this fight record?')) return;
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrfToken(fightForm));
+    fetch(`/info/ajax/fight/delete/${id}/`, { method: 'POST', body: formData })
+      .then(r => r.json())
+      .then(() => loadFightRecords(activeFightBirdId));
+  };
+
+  // --- Weight Logs ---
+  const weightModalEl = document.getElementById('weightModal');
+  const weightForm = document.getElementById('weightForm');
+  const weightErrorBox = document.getElementById('weightError');
+  let activeWeightBirdId = null;
+
+  function loadWeightLogs(birdId) {
+    const list = document.getElementById('weightLogsList');
+    list.innerHTML = '<div class="list-group-item text-muted">Loading weights…</div>';
+
+    fetch(`/info/ajax/weight/${birdId}/`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.data || !data.data.length) {
+          list.innerHTML = '<div class="list-group-item text-muted">No weight logs recorded.</div>';
+          return;
+        }
+
+        list.innerHTML = data.data.map(w => `
+          <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+            <div>
+              <strong>${w.weight_grams} grams</strong>
+              <span class="badge bg-secondary-lt ms-1">${w.time_display}</span>
+              <span class="text-muted small d-block">${w.date} ${w.notes ? '&bull; ' + escapeHtml(w.notes) : ''}</span>
+            </div>
+            <button type="button" class="btn btn-sm btn-ghost-danger btn-icon" onclick="deleteWeightLog(${w.id})">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </div>
+        `).join('');
+      });
+  }
+
+  if (weightModalEl) {
+    weightModalEl.addEventListener('show.bs.modal', function (event) {
+      const button = event.relatedTarget;
+      activeWeightBirdId = button.dataset.id;
+      document.getElementById('weightBirdTag').textContent = button.dataset.tagNumber || '';
+      document.getElementById('weight_bird_id').value = activeWeightBirdId;
+      document.getElementById('weight_date').value = new Date().toISOString().slice(0, 10);
+      weightForm.reset();
+      document.getElementById('weight_bird_id').value = activeWeightBirdId;
+      clearError(weightErrorBox);
+      loadWeightLogs(activeWeightBirdId);
+    });
+
+    weightForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      clearError(weightErrorBox);
+
+      fetch("{% url 'info:weight_log_save_ajax' %}", {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken(weightForm) },
+        body: new FormData(weightForm)
+      })
+      .then(async r => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Failed to record weight.');
+        return d;
+      })
+      .then(() => {
+        weightForm.reset();
+        document.getElementById('weight_bird_id').value = activeWeightBirdId;
+        document.getElementById('weight_date').value = new Date().toISOString().slice(0, 10);
+        loadWeightLogs(activeWeightBirdId);
+      })
+      .catch(err => showError(weightErrorBox, err.message));
+    });
+  }
+
+  window.deleteWeightLog = function (id) {
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrfToken(weightForm));
+    fetch(`/info/ajax/weight/delete/${id}/`, { method: 'POST', body: formData })
+      .then(r => r.json())
+      .then(() => loadWeightLogs(activeWeightBirdId));
+  };
 })();
 </script>
 {% endblock %}

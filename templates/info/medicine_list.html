@@ -1,0 +1,562 @@
+{% extends "theme/base.html" %}
+{% block content %}
+
+  <div class="page-header d-print-none mb-4" aria-label="Page header">
+    <div class="row align-items-center">
+      <div class="col">
+        <nav aria-label="Breadcrumb">
+          <ol class="dh-breadcrumb">
+            <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
+            <li class="is-current">Medicine</li>
+          </ol>
+        </nav>
+        <div class="page-pretitle">Preparedness</div>
+        <h2 class="page-title mb-0">Medicine cabinet</h2>
+        <p class="dh-page-subtitle">
+          Keep vaccines, dewormers, vitamins and first-aid supplies on hand, and know what needs restocking or replacing.
+        </p>
+      </div>
+      <div class="col-12 col-md-auto">
+        <div class="btn-list">
+          <a href="{% url 'info:export_medicines_csv' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-file-csv me-2"></i>Export CSV
+          </a>
+          <button type="button"
+                  class="btn btn-primary"
+                  data-bs-toggle="modal"
+                  data-bs-target="#medicineModal"
+                  data-mode="create">
+            <i class="fas fa-prescription-bottle-medical me-2"></i>Add medicine
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dh-mini-stats">
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-primary"><i class="fas fa-prescription-bottle-medical"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Medicine items</span>
+        <span class="dh-mini-stat-value">{{ counts.total }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-warning"><i class="fas fa-box-open"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Low stock</span>
+        <span class="dh-mini-stat-value">{{ counts.low_stock }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-info"><i class="fas fa-hourglass-half"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Expiring in {{ expiry_window_days }} days</span>
+        <span class="dh-mini-stat-value">{{ counts.expiring }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-danger"><i class="fas fa-triangle-exclamation"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Expired</span>
+        <span class="dh-mini-stat-value">{{ counts.expired }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dh-toolbar">
+    <form method="GET" class="dh-search-form">
+      <label class="visually-hidden" for="medicineSearch">Search medicines</label>
+      <div class="input-group">
+        <span class="input-group-text"><i class="fas fa-search"></i></span>
+        <input type="text"
+               id="medicineSearch"
+               name="q"
+               value="{{ query }}"
+               class="form-control"
+               placeholder="Search by medicine name, category or notes...">
+        <select name="category" class="form-select" aria-label="Filter by category">
+          <option value="">All categories</option>
+          {% for value, label in categories %}
+          <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% if state %}<input type="hidden" name="state" value="{{ state }}">{% endif %}
+        {% if query or state or category %}
+        <a href="{% url 'info:medicine_list' %}" class="btn btn-outline-secondary">Clear</a>
+        {% endif %}
+        <button type="submit" class="btn btn-primary">Search</button>
+      </div>
+    </form>
+
+    <div class="dh-filter-chips" role="group" aria-label="Filter medicines">
+      <a href="?{% if query %}q={{ query|urlencode }}{% endif %}{% if query and category %}&{% endif %}{% if category %}category={{ category }}{% endif %}"
+         class="dh-chip {% if not state %}is-active{% endif %}">
+        All <span class="dh-chip-count">{{ counts.total }}</span>
+      </a>
+      <a href="?state=low{% if query %}&q={{ query|urlencode }}{% endif %}{% if category %}&category={{ category }}{% endif %}"
+         class="dh-chip {% if state == 'low' %}is-active{% endif %}">
+        Low stock <span class="dh-chip-count">{{ counts.low_stock }}</span>
+      </a>
+      <a href="?state=out{% if query %}&q={{ query|urlencode }}{% endif %}{% if category %}&category={{ category }}{% endif %}"
+         class="dh-chip {% if state == 'out' %}is-active{% endif %}">
+        Out of stock <span class="dh-chip-count">{{ counts.out_of_stock }}</span>
+      </a>
+      <a href="?state=expiring{% if query %}&q={{ query|urlencode }}{% endif %}{% if category %}&category={{ category }}{% endif %}"
+         class="dh-chip {% if state == 'expiring' %}is-active{% endif %}">
+        Expiring soon <span class="dh-chip-count">{{ counts.expiring }}</span>
+      </a>
+      <a href="?state=expired{% if query %}&q={{ query|urlencode }}{% endif %}{% if category %}&category={{ category }}{% endif %}"
+         class="dh-chip {% if state == 'expired' %}is-active{% endif %}">
+        Expired <span class="dh-chip-count">{{ counts.expired }}</span>
+      </a>
+    </div>
+  </div>
+
+  <div id="medicineAlert" class="alert d-none alert-dismissible fade" role="alert"></div>
+
+  <div class="card">
+    <div class="card-header d-flex align-items-center">
+      <div class="card-title mb-0">
+        {% if query or state or category %}
+          Filtered medicines
+        {% else %}
+          Cabinet inventory
+        {% endif %}
+        {% if query %}
+        <span class="text-muted fw-normal">— results for "{{ query }}"</span>
+        {% endif %}
+      </div>
+      <span class="badge bg-primary-lt text-primary ms-auto">{{ medicines.paginator.count }} item{{ medicines.paginator.count|pluralize }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-vcenter table-hover card-table text-nowrap dh-stack-table" id="medicineTable">
+        <thead>
+          <tr>
+            <th>Medicine</th>
+            <th>Category</th>
+            <th class="text-end">Stock</th>
+            <th>Expiry</th>
+            <th>Status</th>
+            <th class="w-1">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for medicine in medicines %}
+          <tr data-medicine-id="{{ medicine.id }}">
+            <td class="fw-semibold" data-label="Medicine">
+              <span class="dh-table-tag">
+                <span class="dh-table-avatar"><i class="fas fa-prescription-bottle-medical"></i></span>
+                <span class="dh-tag">{{ medicine.name }}</span>
+              </span>
+              {% if medicine.notes %}
+              <div class="text-muted small fw-normal text-truncate" style="max-width: 22rem;">{{ medicine.notes }}</div>
+              {% endif %}
+            </td>
+            <td data-label="Category">
+              <span class="badge bg-blue-lt text-blue">{{ medicine.category }}</span>
+            </td>
+            <td class="text-end" data-label="Stock">
+              <span class="fw-medium">{{ medicine.stock_quantity|floatformat:"-2" }}</span>
+              <span class="text-muted small">{{ medicine.unit }}</span>
+            </td>
+            <td data-label="Expiry">
+              {% if medicine.expiration_date %}
+                <div>{{ medicine.expiration_date|date:"M j, Y" }}</div>
+                {% if medicine.expiration_date < today %}
+                <span class="dh-status is-danger"><span class="dh-status-dot"></span>Expired</span>
+                {% elif medicine.expiration_date <= expiry_cutoff %}
+                <span class="dh-status is-warning"><span class="dh-status-dot"></span>Expiring soon</span>
+                {% else %}
+                <span class="dh-status is-active"><span class="dh-status-dot"></span>Good</span>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">No expiry set</span>
+              {% endif %}
+            </td>
+            <td data-label="Status">
+              {% if medicine.stock_quantity <= 0 %}
+              <span class="dh-status is-danger"><span class="dh-status-dot"></span>Out of stock</span>
+              {% elif medicine.stock_quantity <= medicine.low_stock_threshold %}
+              <span class="dh-status is-warning"><span class="dh-status-dot"></span>Low stock</span>
+              {% else %}
+              <span class="dh-status is-active"><span class="dh-status-dot"></span>In stock</span>
+              {% endif %}
+            </td>
+            <td data-label="Actions">
+              <div class="dh-row-actions">
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#restockModal"
+                        data-id="{{ medicine.id }}"
+                        data-name="{{ medicine.name }}"
+                        data-unit="{{ medicine.unit }}"
+                        title="Restock"
+                        aria-label="Restock {{ medicine.name }}">
+                  <i class="fas fa-plus text-success"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#medicineModal"
+                        data-mode="edit"
+                        data-id="{{ medicine.id }}"
+                        data-name="{{ medicine.name }}"
+                        data-category="{{ medicine.category }}"
+                        data-unit="{{ medicine.unit }}"
+                        data-stock="{{ medicine.stock_quantity|floatformat:'-2' }}"
+                        data-threshold="{{ medicine.low_stock_threshold|floatformat:'-2' }}"
+                        data-expiration="{{ medicine.expiration_date|date:'Y-m-d' }}"
+                        data-notes="{{ medicine.notes|default:'' }}"
+                        title="Edit"
+                        aria-label="Edit {{ medicine.name }}">
+                  <i class="fas fa-edit text-primary"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-ghost-secondary btn-icon btn-sm medicine-delete-btn"
+                        data-id="{{ medicine.id }}"
+                        data-name="{{ medicine.name }}"
+                        data-delete-url="{% url 'info:medicine_delete_ajax' medicine.id %}"
+                        title="Delete"
+                        aria-label="Delete {{ medicine.name }}">
+                  <i class="fas fa-trash-alt text-danger"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6">
+              <div class="empty py-5">
+                <div class="empty-icon">
+                  <i class="fas fa-prescription-bottle-medical"></i>
+                </div>
+                <p class="empty-title">The medicine cabinet is empty</p>
+                <p class="empty-subtitle">
+                  {% if query or state or category %}
+                  No medicines match the current filters. Try a different search or clear the filters.
+                  {% else %}
+                  Add vaccines, dewormers, vitamins or first-aid supplies so they are ready when needed.
+                  {% endif %}
+                </p>
+                <div class="empty-action">
+                  {% if query or state or category %}
+                  <a href="{% url 'info:medicine_list' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-rotate-left me-2"></i>Clear filters
+                  </a>
+                  {% else %}
+                  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#medicineModal" data-mode="create">
+                    <i class="fas fa-plus-circle me-2"></i>Add medicine
+                  </button>
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if medicines.paginator.num_pages > 1 %}
+    <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+      <p class="m-0 text-muted">
+        Showing <span class="fw-medium">{{ medicines.start_index }}</span>
+        to <span class="fw-medium">{{ medicines.end_index }}</span>
+        of <span class="fw-medium">{{ medicines.paginator.count }}</span> items
+      </p>
+      <ul class="pagination m-0 ms-auto">
+        {% if medicines.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ medicines.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if state %}&state={{ state }}{% endif %}{% if category %}&category={{ category }}{% endif %}">
+            <i class="fas fa-chevron-left me-1"></i> prev
+          </a>
+        </li>
+        {% endif %}
+        {% for num in medicines.paginator.page_range %}
+        <li class="page-item {% if medicines.number == num %}active{% endif %}">
+          <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if state %}&state={{ state }}{% endif %}{% if category %}&category={{ category }}{% endif %}">{{ num }}</a>
+        </li>
+        {% endfor %}
+        {% if medicines.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ medicines.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if state %}&state={{ state }}{% endif %}{% if category %}&category={{ category }}{% endif %}">
+            next <i class="fas fa-chevron-right ms-1"></i>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+<!-- Add / edit medicine -->
+<div class="modal modal-blur fade" id="medicineModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="dh-modal-icon is-success" aria-hidden="true"><i class="fas fa-prescription-bottle-medical"></i></span>
+        <h5 class="modal-title" id="medicineModalTitle">Add medicine</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="medicineForm">
+        {% csrf_token %}
+        <input type="hidden" name="id" id="medicine_id">
+        <div class="modal-body">
+          <div id="medicineFormError" class="alert alert-danger d-none"></div>
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label required">Medicine name</label>
+              <input type="text" name="name" id="medicine_name" class="form-control" maxlength="120" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Category</label>
+              <select name="category" id="medicine_category" class="form-select" required>
+                {% for value, label in categories %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Unit</label>
+              <input type="text" name="unit" id="medicine_unit" class="form-control" maxlength="20" value="ml" placeholder="ml, g, tablet..." required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Stock on hand</label>
+              <input type="number" name="stock_quantity" id="medicine_stock" class="form-control" min="0" step="0.01" value="0" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Low stock alert at</label>
+              <input type="number" name="low_stock_threshold" id="medicine_threshold" class="form-control" min="0" step="0.01" value="0">
+              <small class="form-hint">Alert when stock falls to this amount.</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Expiration date</label>
+              <input type="date" name="expiration_date" id="medicine_expiration" class="form-control">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Notes</label>
+              <textarea name="notes" id="medicine_notes" class="form-control" rows="2" placeholder="Dosage, storage instructions, supplier..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="medicineSubmitBtn">Save medicine</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Restock medicine -->
+<div class="modal modal-blur fade" id="restockModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="dh-modal-icon is-success" aria-hidden="true"><i class="fas fa-plus"></i></span>
+        <h5 class="modal-title">Restock medicine</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="restockForm">
+        {% csrf_token %}
+        <input type="hidden" name="id" id="restock_id">
+        <div class="modal-body">
+          <div id="restockFormError" class="alert alert-danger d-none"></div>
+          <p class="text-muted">
+            Add stock for <strong id="restockName"></strong>.
+          </p>
+          <label class="form-label required">Quantity to add (<span id="restockUnit">ml</span>)</label>
+          <input type="number" name="amount" id="restock_amount" class="form-control" min="0.01" step="0.01" value="1" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success" id="restockSubmitBtn">Add stock</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const medicineModalEl = document.getElementById('medicineModal');
+  const restockModalEl = document.getElementById('restockModal');
+  const medicineForm = document.getElementById('medicineForm');
+  const restockForm = document.getElementById('restockForm');
+  const medicineErrorBox = document.getElementById('medicineFormError');
+  const restockErrorBox = document.getElementById('restockFormError');
+  const alertBox = document.getElementById('medicineAlert');
+  const tableBody = document.getElementById('medicineTable');
+
+  const SAVE_URL = "{% url 'info:medicine_save_ajax' %}";
+  const RESTOCK_URL = "{% url 'info:medicine_restock_ajax' %}";
+  const DELETE_URL = "{% url 'info:medicine_delete_ajax' 0 %}";
+
+  function csrfToken(form) {
+    return form.querySelector('[name=csrfmiddlewaretoken]').value;
+  }
+
+  function showError(box, message) {
+    box.textContent = message;
+    box.classList.remove('d-none');
+  }
+
+  function clearError(box) {
+    box.textContent = '';
+    box.classList.add('d-none');
+  }
+
+  function showAlert(message, variant) {
+    alertBox.className = 'alert alert-' + (variant || 'success') +
+      ' alert-dismissible fade show';
+    alertBox.innerHTML =
+      '<i class="fas fa-circle-check me-2" aria-hidden="true"></i>' +
+      message +
+      '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+    alertBox.classList.remove('d-none');
+  }
+
+  function refresh() {
+    if (typeof window.refreshMainContent === 'function') {
+      window.refreshMainContent();
+    } else {
+      window.location.reload();
+    }
+  }
+
+  function resetMedicineForm() {
+    medicineForm.reset();
+    document.getElementById('medicine_id').value = '';
+    document.getElementById('medicine_unit').value = 'ml';
+    document.getElementById('medicine_stock').value = '0';
+    document.getElementById('medicine_threshold').value = '0';
+    document.getElementById('medicineModalTitle').textContent = 'Add medicine';
+    document.getElementById('medicineSubmitBtn').textContent = 'Save medicine';
+    clearError(medicineErrorBox);
+  }
+
+  medicineModalEl.addEventListener('show.bs.modal', function (event) {
+    resetMedicineForm();
+    const button = event.relatedTarget;
+    if (!button || button.dataset.mode !== 'edit') return;
+
+    document.getElementById('medicineModalTitle').textContent = 'Edit medicine';
+    document.getElementById('medicineSubmitBtn').textContent = 'Save changes';
+    document.getElementById('medicine_id').value = button.dataset.id || '';
+    document.getElementById('medicine_name').value = button.dataset.name || '';
+    document.getElementById('medicine_category').value = button.dataset.category || 'Vaccine';
+    document.getElementById('medicine_unit').value = button.dataset.unit || 'ml';
+    document.getElementById('medicine_stock').value = button.dataset.stock || '0';
+    document.getElementById('medicine_threshold').value = button.dataset.threshold || '0';
+    document.getElementById('medicine_expiration').value = button.dataset.expiration || '';
+    document.getElementById('medicine_notes').value = button.dataset.notes || '';
+  });
+
+  medicineForm.addEventListener('submit', function (event) {
+    event.preventDefault();
+    clearError(medicineErrorBox);
+
+    const submitBtn = document.getElementById('medicineSubmitBtn');
+    submitBtn.disabled = true;
+
+    fetch(SAVE_URL, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken(medicineForm) },
+      body: new FormData(medicineForm),
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not save the medicine.');
+        }
+        return data;
+      })
+      .then(function (data) {
+        bootstrap.Modal.getOrCreateInstance(medicineModalEl).hide();
+        showAlert(data.message || 'Medicine saved successfully.', 'success');
+        refresh();
+      })
+      .catch(function (error) {
+        showError(medicineErrorBox, error.message);
+      })
+      .finally(function () {
+        submitBtn.disabled = false;
+      });
+  });
+
+  restockModalEl.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    document.getElementById('restock_id').value = button.dataset.id || '';
+    document.getElementById('restockName').textContent = button.dataset.name || '';
+    document.getElementById('restockUnit').textContent = button.dataset.unit || '';
+    document.getElementById('restock_amount').value = '1';
+    clearError(restockErrorBox);
+  });
+
+  restockForm.addEventListener('submit', function (event) {
+    event.preventDefault();
+    clearError(restockErrorBox);
+
+    const submitBtn = document.getElementById('restockSubmitBtn');
+    submitBtn.disabled = true;
+
+    fetch(RESTOCK_URL, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken(restockForm) },
+      body: new FormData(restockForm),
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not restock the medicine.');
+        }
+        return data;
+      })
+      .then(function (data) {
+        bootstrap.Modal.getOrCreateInstance(restockModalEl).hide();
+        showAlert(data.message || 'Medicine restocked successfully.', 'success');
+        refresh();
+      })
+      .catch(function (error) {
+        showError(restockErrorBox, error.message);
+      })
+      .finally(function () {
+        submitBtn.disabled = false;
+      });
+  });
+
+  tableBody.addEventListener('click', function (event) {
+    const button = event.target.closest('.medicine-delete-btn');
+    if (!button) return;
+
+    const name = button.dataset.name || 'this medicine';
+    if (!window.confirm('Remove "' + name + '" from the cabinet? This cannot be undone.')) return;
+
+    button.disabled = true;
+    fetch(button.dataset.deleteUrl, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken(medicineForm) },
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Could not delete the medicine.');
+        }
+        return data;
+      })
+      .then(function (data) {
+        showAlert(data.message || 'Medicine removed successfully.', 'success');
+        refresh();
+      })
+      .catch(function (error) {
+        showAlert(error.message, 'danger');
+      })
+      .finally(function () {
+        button.disabled = false;
+      });
+  });
+})();
+</script>
+{% endblock %}
