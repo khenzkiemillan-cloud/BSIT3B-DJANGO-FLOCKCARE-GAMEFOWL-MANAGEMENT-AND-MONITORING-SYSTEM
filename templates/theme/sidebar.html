@@ -34,8 +34,8 @@
         </li>
         <li class="nav-item mb-1">
           <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}" data-turbo-frame="main-content">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="fa fa-dashboard"></i>
+            <span class="nav-link-icon">
+              <i class="fa-solid fa-gauge-high"></i>
             </span>
             <span class="nav-link-title">Dashboard</span>
           </a>
@@ -54,8 +54,8 @@
 
         <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.app_name == 'info' and request.resolver_match.url_name != 'health_list' and request.resolver_match.url_name != 'medicine_list' and request.resolver_match.url_name != 'breeding_list' and request.GET.status != 'Conditioning' %}active{% endif %}" href="{% url 'info:info_list' %}" data-turbo-frame="main-content">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-dove"></i>
+            <span class="nav-link-icon">
+              <i class="fa-solid fa-feather-pointed"></i>
             </span>
             <span class="nav-link-title">Flock</span>
           </a>
@@ -63,8 +63,8 @@
 
         <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.app_name == 'info' and request.resolver_match.url_name != 'health_list' and request.resolver_match.url_name != 'medicine_list' and request.resolver_match.url_name != 'breeding_list' and request.GET.status == 'Conditioning' %}active{% endif %}" href="{% url 'info:info_list' %}?status=Conditioning" data-turbo-frame="main-content">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-dumbbell"></i>
+            <span class="nav-link-icon">
+              <i class="fa-solid fa-dumbbell"></i>
             </span>
             <span class="nav-link-title">Conditioning</span>
           </a>
@@ -72,8 +72,8 @@
 
         <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.url_name == 'breeding_list' %}active{% endif %}" href="{% url 'info:breeding_list' %}" data-turbo-frame="main-content">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-egg"></i>
+            <span class="nav-link-icon">
+              <i class="fa-solid fa-egg"></i>
             </span>
             <span class="nav-link-title">Breeding</span>
           </a>
@@ -81,8 +81,8 @@
 
         <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.url_name == 'health_list' %}active{% endif %}" href="{% url 'info:health_list' %}" data-turbo-frame="main-content">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-heart-pulse"></i>
+            <span class="nav-link-icon">
+              <i class="fa-solid fa-heart-pulse"></i>
             </span>
             <span class="nav-link-title">Health</span>
           </a>
@@ -90,10 +90,19 @@
 
         <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.url_name == 'medicine_list' %}active{% endif %}" href="{% url 'info:medicine_list' %}" data-turbo-frame="main-content">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-prescription-bottle-medical"></i>
+            <span class="nav-link-icon">
+              <i class="fa-solid fa-capsules"></i>
             </span>
             <span class="nav-link-title">Medicine</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'finance_list' %}active{% endif %}" href="{% url 'info:finance_list' %}" data-turbo-frame="main-content">
+            <span class="nav-link-icon">
+              <i class="fa-solid fa-wallet"></i>
+            </span>
+            <span class="nav-link-title">Finance</span>
           </a>
         </li>
 

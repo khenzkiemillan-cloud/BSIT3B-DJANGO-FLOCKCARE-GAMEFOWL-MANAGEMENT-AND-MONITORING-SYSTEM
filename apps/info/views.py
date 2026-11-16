@@ -1,5 +1,3 @@
-import csv
-import io
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
@@ -8,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, Q, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -23,11 +21,11 @@ from .choices import (
 from .forms import (
     FlockMemberForm, HealthRecordForm, MedicineForm,
     FightRecordForm, WeightLogForm, BreedingPenForm, ClutchRecordForm,
-    ConditioningForm,
+    ConditioningForm, FinancialEntryForm,
 )
 from .models import (
     Breed, FlockMember, HealthRecord, Medicine,
-    FightRecord, WeightLog, BreedingPen, ClutchRecord
+    FightRecord, WeightLog, BreedingPen, ClutchRecord, FinancialEntry
 )
 
 HEALTH_DUE_WINDOW_DAYS = 30
@@ -784,39 +782,6 @@ def health_list_page(request):
     })
 
 
-@login_required(login_url='login')
-def export_health_csv(request):
-    """Export the user's health and treatment records as a CSV file."""
-    response = HttpResponse(content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = 'attachment; filename="health_records.csv"'
-    response.write('\ufeff')
-
-    writer = csv.writer(response)
-    writer.writerow([
-        'Bird Tag',
-        'Record Type',
-        'Title',
-        'Date Administered',
-        'Next Due Date',
-        'Notes',
-    ])
-
-    records = HealthRecord.objects.filter(
-        bird__user=request.user,
-    ).select_related('bird').order_by('-date_administered', '-created_at')
-
-    for record in records:
-        writer.writerow([
-            record.bird.tag_number,
-            record.record_type,
-            record.title,
-            record.date_administered,
-            record.next_due_date or '',
-            record.notes or '',
-        ])
-
-    return response
-
 
 # --- MEDICINE CABINET ---
 
@@ -991,38 +956,6 @@ def medicine_restock_ajax(request):
     })
 
 
-@login_required(login_url='login')
-def export_medicines_csv(request):
-    """Export the user's medicine cabinet as a CSV file."""
-    response = HttpResponse(content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = 'attachment; filename="medicine_cabinet.csv"'
-    response.write('\ufeff')
-
-    writer = csv.writer(response)
-    writer.writerow([
-        'Medicine',
-        'Category',
-        'Unit',
-        'Stock',
-        'Low Stock Threshold',
-        'Expiration Date',
-        'Notes',
-    ])
-
-    medicines = Medicine.objects.filter(user=request.user).order_by('name')
-    for medicine in medicines:
-        writer.writerow([
-            medicine.name,
-            medicine.category,
-            medicine.unit,
-            medicine.stock_quantity,
-            medicine.low_stock_threshold,
-            medicine.expiration_date or '',
-            medicine.notes or '',
-        ])
-
-    return response
-
 
 # --- 3-GENERATION PEDIGREE VIEWER & CERTIFICATE ---
 
@@ -1112,171 +1045,6 @@ def pedigree_certificate_page(request, pk):
     })
 
 
-# --- EXPORT & IMPORT TO CSV ---
-
-@login_required(login_url='login')
-def export_flock_csv(request):
-    """Export the user's flock inventory into a downloadable CSV file."""
-    response = HttpResponse(content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = 'attachment; filename="flock_inventory.csv"'
-    response.write('\ufeff')  # BOM so Excel opens accented characters correctly.
-
-    writer = csv.writer(response)
-    writer.writerow([
-        'Tag Number', 'Breed', 'Gender', 'Status',
-        'Birth Date', 'Weight (g)', 'Wins', 'Losses', 'Draws',
-        'Comb Type', 'Leg Color', 'Color', 'Cage Number',
-        'Sire', 'Dam'
-    ])
-
-    members = scoped_flock_members(request.user).select_related('breed')
-    for member in members:
-        writer.writerow([
-            member.tag_number,
-            member.breed.name if member.breed else '',
-            member.gender,
-            member.status,
-            member.birth_date or '',
-            member.weight_grams or '',
-            member.wins,
-            member.losses,
-            member.draws,
-            member.comb_type or '',
-            member.leg_color or '',
-            member.color or '',
-            member.cage_number or '',
-            member.sire or '',
-            member.dam or '',
-        ])
-
-    return response
-
-
-@login_required(login_url='login')
-@require_POST
-def import_flock_csv(request):
-    """Import flock members from an uploaded CSV spreadsheet."""
-    csv_file = request.FILES.get('csv_file')
-    if not csv_file:
-        messages.error(request, 'Please select a CSV file to upload.')
-        return redirect('info:info_list')
-
-    if not csv_file.name.lower().endswith('.csv'):
-        messages.error(request, 'Invalid file format. Please upload a .csv file.')
-        return redirect('info:info_list')
-
-    try:
-        decoded = csv_file.read().decode('utf-8-sig')
-    except (UnicodeDecodeError, AttributeError):
-        messages.error(request, 'Could not read CSV file. Please ensure it is saved in UTF-8 format.')
-        return redirect('info:info_list')
-
-    reader = csv.DictReader(io.StringIO(decoded))
-    if not reader.fieldnames:
-        messages.error(request, 'The CSV file appears to be empty.')
-        return redirect('info:info_list')
-
-    imported_count = 0
-    updated_count = 0
-    row_errors = []
-
-    for row_idx, row in enumerate(reader, start=2):
-        try:
-            with transaction.atomic():
-                tag = (row.get('Tag Number') or row.get('tag_number') or '').strip()
-                if not tag:
-                    continue
-                if len(tag) > 50:
-                    raise ValueError('tag number is longer than 50 characters')
-
-                gender = (row.get('Gender') or row.get('gender') or 'Cock').strip().capitalize()
-                if gender not in ['Stag', 'Cock', 'Pullet', 'Hen']:
-                    gender = 'Cock'
-
-                status = (row.get('Status') or row.get('status') or 'Active').strip().capitalize()
-                if status not in ['Active', 'Conditioning', 'Broodcock', 'Broodhen', 'Retired']:
-                    status = 'Active'
-
-                breed_name = (row.get('Breed') or row.get('breed') or '').strip()
-                breed = None
-                if breed_name:
-                    breed = Breed.objects.filter(name__iexact=breed_name).first()
-                    if breed is None:
-                        breed = Breed.objects.create(name=breed_name[:100])
-
-                comb_type = _choice_value(
-                    row.get('Comb Type') or row.get('comb_type'),
-                    FlockMember.COMB_CHOICES,
-                    'Pea',
-                )
-                leg_color = _choice_value(
-                    row.get('Leg Color') or row.get('leg_color'),
-                    FlockMember.LEG_COLOR_CHOICES,
-                    'Yellow',
-                )
-
-                defaults = {
-                    'breed': breed,
-                    'gender': gender,
-                    'status': status,
-                    'comb_type': comb_type,
-                    'leg_color': leg_color,
-                    'color': (row.get('Color') or row.get('color') or '').strip()[:100],
-                    'cage_number': (row.get('Cage Number') or row.get('cage_number') or '').strip()[:50],
-                    'sire': (row.get('Sire') or row.get('sire') or '').strip()[:50],
-                    'dam': (row.get('Dam') or row.get('dam') or '').strip()[:50],
-                    'wins': _clean_int(row.get('Wins') or row.get('wins'), 0),
-                    'losses': _clean_int(row.get('Losses') or row.get('losses'), 0),
-                    'draws': _clean_int(row.get('Draws') or row.get('draws'), 0),
-                }
-
-                # Blank optional cells leave the existing value untouched.
-                birth_raw = (row.get('Birth Date') or row.get('birth_date') or '').strip()
-                if birth_raw:
-                    birth_date = parse_date(birth_raw)
-                    if birth_date is None:
-                        raise ValueError(f'invalid birth date "{birth_raw}" (use YYYY-MM-DD)')
-                    defaults['birth_date'] = birth_date
-
-                weight_raw = (row.get('Weight (g)') or row.get('weight_grams') or '').strip()
-                if weight_raw:
-                    weight_grams = _clean_int(weight_raw, None)
-                    if weight_grams is None:
-                        raise ValueError(f'invalid weight "{weight_raw}"')
-                    defaults['weight_grams'] = weight_grams
-
-                # Match existing tags case-insensitively to mirror the form's
-                # uniqueness rule and avoid duplicate "Blue"/"blue" birds.
-                bird = FlockMember.objects.filter(
-                    user=request.user, tag_number__iexact=tag
-                ).first()
-                if bird is None:
-                    FlockMember.objects.create(user=request.user, tag_number=tag, **defaults)
-                    imported_count += 1
-                else:
-                    for field, value in defaults.items():
-                        setattr(bird, field, value)
-                    bird.save(update_fields=list(defaults))
-                    updated_count += 1
-        except Exception as exc:  # keep importing the remaining rows
-            row_errors.append(f'Row {row_idx}: {exc}')
-
-    if imported_count or updated_count:
-        messages.success(
-            request,
-            f'CSV Import complete: {imported_count} new birds added, '
-            f'{updated_count} existing birds updated.'
-        )
-    if row_errors:
-        preview = '; '.join(row_errors[:3])
-        more = f' (+{len(row_errors) - 3} more)' if len(row_errors) > 3 else ''
-        messages.warning(request, f'{len(row_errors)} row(s) could not be imported — {preview}{more}')
-    if not imported_count and not updated_count and not row_errors:
-        messages.info(request, 'The CSV file did not contain any flock members.')
-
-    return redirect('info:info_list')
-
-
 # --- BATCH ACTIONS ---
 
 @login_required(login_url='login')
@@ -1319,3 +1087,117 @@ def flock_batch_action_ajax(request):
         return JsonResponse({'status': 'success', 'message': f'Deleted {count} birds.'})
 
     return JsonResponse({'error': 'Unknown action.'}, status=400)
+
+
+# --- EXPENSES / FINANCIAL TRACKER ---
+
+@login_required(login_url='login')
+def finance_list_page(request):
+    """Render the expenses and income tracker with summary totals."""
+    today = timezone.localdate()
+    query = request.GET.get('q', '').strip()
+    entry_type = request.GET.get('type', '').strip()
+    category = request.GET.get('category', '').strip()
+
+    entries = FinancialEntry.objects.filter(user=request.user)
+    counts = entries.aggregate(
+        total=Count('id'),
+        expenses_count=Count('id', filter=Q(entry_type=FinancialEntry.TYPE_EXPENSE)),
+        income_count=Count('id', filter=Q(entry_type=FinancialEntry.TYPE_INCOME)),
+    )
+    totals = entries.aggregate(
+        total_expenses=Sum('amount', filter=Q(entry_type=FinancialEntry.TYPE_EXPENSE)),
+        total_income=Sum('amount', filter=Q(entry_type=FinancialEntry.TYPE_INCOME)),
+    )
+    total_expenses = totals['total_expenses'] or Decimal('0.00')
+    total_income = totals['total_income'] or Decimal('0.00')
+    net_total = total_income - total_expenses
+
+    if query:
+        entries = entries.filter(
+            Q(description__icontains=query) |
+            Q(category__icontains=query) |
+            Q(notes__icontains=query)
+        )
+
+    if entry_type in (FinancialEntry.TYPE_EXPENSE, FinancialEntry.TYPE_INCOME):
+        entries = entries.filter(entry_type=entry_type)
+    else:
+        entry_type = ''
+
+    if category:
+        entries = entries.filter(category=category)
+
+    entries = entries.select_related('bird').order_by('-date', '-created_at')
+    paginator = Paginator(entries, 15)
+    page = paginator.get_page(request.GET.get('page', 1))
+
+    if entry_type == FinancialEntry.TYPE_INCOME:
+        categories = FinancialEntry.INCOME_CATEGORIES
+    elif entry_type == FinancialEntry.TYPE_EXPENSE:
+        categories = FinancialEntry.EXPENSE_CATEGORIES
+    else:
+        categories = FinancialEntry.CATEGORY_CHOICES
+
+    return render(request, 'info/finance_list.html', {
+        'entries': page,
+        'query': query,
+        'entry_type': entry_type,
+        'category': category,
+        'categories': categories,
+        'expense_categories': FinancialEntry.EXPENSE_CATEGORIES,
+        'income_categories': FinancialEntry.INCOME_CATEGORIES,
+        'birds': scoped_flock_members(request.user).order_by('tag_number'),
+        'counts': counts,
+        'total_expenses': total_expenses,
+        'total_income': total_income,
+        'net_total': net_total,
+        'today': today,
+    })
+
+
+@login_required(login_url='login')
+@require_POST
+@_json_not_found
+def finance_save_ajax(request):
+    """Create or update a financial entry."""
+    entry_id = (request.POST.get('id') or '').strip()
+
+    if entry_id:
+        if not entry_id.isdigit():
+            raise Http404('Entry not found.')
+        entry = FinancialEntry.objects.filter(pk=entry_id, user=request.user).first()
+        if entry is None:
+            raise Http404('Entry not found.')
+    else:
+        entry = FinancialEntry(user=request.user)
+
+    form = FinancialEntryForm(request.POST, instance=entry, user=request.user)
+    if not form.is_valid():
+        return JsonResponse(
+            {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
+            status=400,
+        )
+
+    entry = form.save(commit=False)
+    entry.user = request.user
+    entry.save()
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Financial entry updated successfully.' if entry_id else 'Financial entry added successfully.',
+        'id': entry.pk,
+    })
+
+
+@login_required(login_url='login')
+@require_POST
+@_json_not_found
+def finance_delete_ajax(request, pk):
+    """Delete one of the user's financial entries."""
+    entry = FinancialEntry.objects.filter(pk=pk, user=request.user).first()
+    if entry is None:
+        raise Http404('Entry not found.')
+
+    entry.delete()
+    return JsonResponse({'status': 'success', 'message': 'Financial entry deleted successfully.'})

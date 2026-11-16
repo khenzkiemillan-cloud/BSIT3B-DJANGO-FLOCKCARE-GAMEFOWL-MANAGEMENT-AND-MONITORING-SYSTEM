@@ -89,7 +89,7 @@
                  name="q"
                  value="{{ query }}"
                  class="form-control"
-                 placeholder="Search by name, username, or email...">
+                 placeholder="Search by name, username, or email">
           {% if role %}<input type="hidden" name="role" value="{{ role }}">{% endif %}
           {% if query or role %}
           <a href="{% url 'users:user_list' %}" class="btn btn-outline-secondary">Clear</a>

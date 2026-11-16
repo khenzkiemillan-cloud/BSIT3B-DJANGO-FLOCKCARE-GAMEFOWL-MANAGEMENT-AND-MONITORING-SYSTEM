@@ -1,0 +1,367 @@
+{% extends "theme/base.html" %}
+{% block content %}
+
+  <div class="page-header d-print-none mb-4" aria-label="Page header">
+    <div class="row align-items-center">
+      <div class="col">
+        <nav aria-label="Breadcrumb">
+          <ol class="dh-breadcrumb">
+            <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
+            <li class="is-current">Finance</li>
+          </ol>
+        </nav>
+        <div class="page-pretitle">Expenses &amp; income</div>
+        <h2 class="page-title mb-0">Financial tracker</h2>
+        <p class="dh-page-subtitle">
+          Track flock-related expenses and income, monitor spending, and see your net balance at a glance.
+        </p>
+      </div>
+      <div class="col-12 col-md-auto">
+        <div class="btn-list">
+          <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#financeModal" data-mode="create">
+            <i class="fas fa-plus-circle me-2"></i>Add entry
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dh-mini-stats">
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-success"><i class="fas fa-arrow-trend-up"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Total income</span>
+        <span class="dh-mini-stat-value">₱{{ total_income|floatformat:2 }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-danger"><i class="fas fa-arrow-trend-down"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Total expenses</span>
+        <span class="dh-mini-stat-value">₱{{ total_expenses|floatformat:2 }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon {% if net_total >= 0 %}is-primary{% else %}is-warning{% endif %}"><i class="fas fa-scale-balanced"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Net balance</span>
+        <span class="dh-mini-stat-value">₱{{ net_total|floatformat:2 }}</span>
+      </div>
+    </div>
+    <div class="dh-mini-stat">
+      <span class="dh-mini-stat-icon is-info"><i class="fas fa-receipt"></i></span>
+      <div class="min-w-0">
+        <span class="dh-mini-stat-label">Entries</span>
+        <span class="dh-mini-stat-value">{{ counts.total }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dh-toolbar">
+    <form method="GET" class="dh-search-form">
+      <label class="visually-hidden" for="financeSearch">Search entries</label>
+      <div class="input-group">
+        <span class="input-group-text"><i class="fas fa-search"></i></span>
+        <input type="text" id="financeSearch" name="q" value="{{ query }}" class="form-control" placeholder="Search by description, category or notes">
+        <select name="type" class="form-select" aria-label="Filter by type">
+          <option value="">All types</option>
+          <option value="expense" {% if entry_type == 'expense' %}selected{% endif %}>Expenses</option>
+          <option value="income" {% if entry_type == 'income' %}selected{% endif %}>Income</option>
+        </select>
+        <select name="category" class="form-select" aria-label="Filter by category">
+          <option value="">All categories</option>
+          {% for value, label in categories %}
+          <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% if query or entry_type or category %}
+        <a href="{% url 'info:finance_list' %}" class="btn btn-outline-secondary">Clear</a>
+        {% endif %}
+        <button type="submit" class="btn btn-primary">Filter</button>
+      </div>
+    </form>
+
+    <div class="dh-filter-chips" role="group" aria-label="Filter entries">
+      <a href="?{% if query %}q={{ query|urlencode }}{% endif %}" class="dh-chip {% if not entry_type %}is-active{% endif %}">
+        All <span class="dh-chip-count">{{ counts.total }}</span>
+      </a>
+      <a href="?type=expense{% if query %}&q={{ query|urlencode }}{% endif %}" class="dh-chip {% if entry_type == 'expense' %}is-active{% endif %}">
+        Expenses <span class="dh-chip-count">{{ counts.expenses_count }}</span>
+      </a>
+      <a href="?type=income{% if query %}&q={{ query|urlencode }}{% endif %}" class="dh-chip {% if entry_type == 'income' %}is-active{% endif %}">
+        Income <span class="dh-chip-count">{{ counts.income_count }}</span>
+      </a>
+    </div>
+  </div>
+
+  <div id="financeAlert" class="alert d-none alert-dismissible fade" role="alert"></div>
+
+  <div class="card">
+    <div class="card-header d-flex align-items-center">
+      <div class="card-title mb-0">
+        {% if query or entry_type or category %}Filtered entries{% else %}Recent entries{% endif %}
+      </div>
+      <span class="badge bg-primary-lt text-primary ms-auto">{{ entries.paginator.count }} entr{{ entries.paginator.count|pluralize:"y,ies" }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-vcenter table-hover card-table text-nowrap dh-stack-table" id="financeTable">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Related bird</th>
+            <th>Type</th>
+            <th>Category</th>
+            <th class="text-end">Amount</th>
+            <th class="w-1">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in entries %}
+          <tr data-entry-id="{{ entry.id }}">
+            <td data-label="Date">{{ entry.date|date:"M j, Y" }}</td>
+            <td class="fw-semibold" data-label="Description">
+              <div>{{ entry.description }}</div>
+              {% if entry.notes %}<div class="text-muted small fw-normal text-truncate" style="max-width: 22rem;">{{ entry.notes }}</div>{% endif %}
+            </td>
+            <td data-label="Related bird">
+              {% if entry.bird %}
+              <span class="dh-tag"><i class="fas fa-dove me-1 text-muted"></i>{{ entry.bird.tag_number }}</span>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td data-label="Type">
+              {% if entry.entry_type == 'income' %}
+              <span class="dh-status is-active"><span class="dh-status-dot"></span>Income</span>
+              {% else %}
+              <span class="dh-status is-danger"><span class="dh-status-dot"></span>Expense</span>
+              {% endif %}
+            </td>
+            <td data-label="Category"><span class="badge bg-blue-lt text-blue">{{ entry.category }}</span></td>
+            <td class="text-end fw-semibold {% if entry.entry_type == 'income' %}text-success{% else %}text-danger{% endif %}" data-label="Amount">
+              {% if entry.entry_type == 'income' %}+{% else %}-{% endif %}₱{{ entry.amount|floatformat:2 }}
+            </td>
+            <td data-label="Actions">
+              <div class="dh-row-actions">
+                <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#financeModal" data-mode="edit"
+                        data-id="{{ entry.id }}" data-entry-type="{{ entry.entry_type }}" data-category="{{ entry.category }}"
+                        data-amount="{{ entry.amount }}" data-date="{{ entry.date|date:'Y-m-d' }}"
+                        data-description="{{ entry.description|escape }}" data-notes="{{ entry.notes|default:''|escape }}"
+                        data-bird-id="{{ entry.bird_id|default:'' }}"
+                        title="Edit" aria-label="Edit entry">
+                  <i class="fas fa-edit text-primary"></i>
+                </button>
+                <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm finance-delete-btn"
+                        data-id="{{ entry.id }}" data-delete-url="{% url 'info:finance_delete_ajax' entry.id %}"
+                        title="Delete" aria-label="Delete entry">
+                  <i class="fas fa-trash-alt text-danger"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7">
+              <div class="empty py-5">
+                <div class="empty-icon"><i class="fas fa-wallet"></i></div>
+                <p class="empty-title">No financial entries yet</p>
+                <p class="empty-subtitle">
+                  {% if query or entry_type or category %}
+                  No entries match the current filters. Try adjusting your search or clear the filters.
+                  {% else %}
+                  Start tracking expenses and income for feed, medicine, equipment, bird sales, prizes, and more.
+                  {% endif %}
+                </p>
+                <div class="empty-action">
+                  {% if query or entry_type or category %}
+                  <a href="{% url 'info:finance_list' %}" class="btn btn-outline-secondary"><i class="fas fa-rotate-left me-2"></i>Clear filters</a>
+                  {% else %}
+                  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#financeModal" data-mode="create">
+                    <i class="fas fa-plus-circle me-2"></i>Add entry
+                  </button>
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if entries.paginator.num_pages > 1 %}
+    <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+      <p class="m-0 text-muted">Showing <span class="fw-medium">{{ entries.start_index }}</span> to <span class="fw-medium">{{ entries.end_index }}</span> of <span class="fw-medium">{{ entries.paginator.count }}</span> entries</p>
+      <ul class="pagination m-0 ms-auto">
+        {% if entries.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page={{ entries.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if entry_type %}&type={{ entry_type }}{% endif %}{% if category %}&category={{ category }}{% endif %}"><i class="fas fa-chevron-left me-1"></i> prev</a></li>
+        {% endif %}
+        {% for num in entries.paginator.page_range %}
+        <li class="page-item {% if entries.number == num %}active{% endif %}"><a class="page-link" href="?page={{ num }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if entry_type %}&type={{ entry_type }}{% endif %}{% if category %}&category={{ category }}{% endif %}">{{ num }}</a></li>
+        {% endfor %}
+        {% if entries.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ entries.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if entry_type %}&type={{ entry_type }}{% endif %}{% if category %}&category={{ category }}{% endif %}">next <i class="fas fa-chevron-right ms-1"></i></a></li>
+        {% endif %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Add / edit financial entry -->
+  <div class="modal modal-blur fade" id="financeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="dh-modal-icon is-primary" aria-hidden="true"><i class="fas fa-wallet"></i></span>
+          <h5 class="modal-title" id="financeModalTitle">Add entry</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="financeForm" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="id" id="finance_id">
+          <div class="modal-body">
+            <div id="financeFormError" class="alert alert-danger d-none"></div>
+            <div class="row g-3">
+              <div class="col-sm-6 col-md-4">
+                <label class="form-label required" for="finance_type">Type</label>
+                <select name="entry_type" id="finance_type" class="form-select" required>
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                </select>
+              </div>
+              <div class="col-sm-6 col-md-4">
+                <label class="form-label required" for="finance_category">Category</label>
+                <select name="category" id="finance_category" class="form-select" required></select>
+              </div>
+              <div class="col-sm-6 col-md-4">
+                <label class="form-label required" for="finance_date">Date</label>
+                <input type="date" name="date" id="finance_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+              </div>
+              <div class="col-sm-6 col-md-4">
+                <label class="form-label required" for="finance_amount">Amount (₱)</label>
+                <input type="number" name="amount" id="finance_amount" class="form-control" min="0.01" step="0.01" required>
+              </div>
+              <div class="col-sm-12 col-md-8">
+                <label class="form-label required" for="finance_description">Description</label>
+                <input type="text" name="description" id="finance_description" class="form-control" maxlength="200" placeholder="e.g. Gamefowl feed, Derby entry fee, Bird sale" required>
+              </div>
+              <div class="col-sm-12 col-md-6">
+                <label class="form-label" for="finance_bird">Related bird (optional)</label>
+                <select name="bird" id="finance_bird" class="form-select">
+                  <option value="">No specific bird</option>
+                  {% for bird in birds %}
+                  <option value="{{ bird.id }}">{{ bird.tag_number }}{% if bird.breed %} — {{ bird.breed.name }}{% endif %}</option>
+                  {% endfor %}
+                </select>
+                <small class="form-hint">Link this entry to a flock member for per-bird cost/sale tracking.</small>
+              </div>
+              <div class="col-sm-12 col-md-6">
+                <label class="form-label" for="finance_notes">Notes</label>
+                <textarea name="notes" id="finance_notes" class="form-control" rows="2" placeholder="Optional details"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="financeSubmitBtn">Save entry</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const modalEl = document.getElementById('financeModal');
+  const form = document.getElementById('financeForm');
+  const errorBox = document.getElementById('financeFormError');
+  const alertBox = document.getElementById('financeAlert');
+  const table = document.getElementById('financeTable');
+  const typeSelect = document.getElementById('finance_type');
+  const categorySelect = document.getElementById('finance_category');
+  const SAVE_URL = "{% url 'info:finance_save_ajax' %}";
+
+  const expenseCategories = [
+    {% for value, label in expense_categories %}["{{ value|escapejs }}","{{ label|escapejs }}"]{% if not forloop.last %},{% endif %}{% endfor %}
+  ];
+  const incomeCategories = [
+    {% for value, label in income_categories %}["{{ value|escapejs }}","{{ label|escapejs }}"]{% if not forloop.last %},{% endif %}{% endfor %}
+  ];
+
+  function csrfToken() { return form.querySelector('[name=csrfmiddlewaretoken]').value; }
+  function showError(msg) { errorBox.textContent = msg; errorBox.classList.remove('d-none'); }
+  function clearError() { errorBox.textContent = ''; errorBox.classList.add('d-none'); }
+  function showAlert(message, variant) {
+    alertBox.className = 'alert alert-' + (variant || 'success') + ' alert-dismissible fade show';
+    alertBox.innerHTML = message + '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+    alertBox.classList.remove('d-none');
+  }
+  function refresh() {
+    if (typeof window.refreshMainContent === 'function') window.refreshMainContent();
+    else window.location.reload();
+  }
+  function fillCategories(selected) {
+    const list = typeSelect.value === 'income' ? incomeCategories : expenseCategories;
+    categorySelect.innerHTML = '';
+    list.forEach(function (item) {
+      const opt = document.createElement('option');
+      opt.value = item[0];
+      opt.textContent = item[1];
+      if (item[0] === selected) opt.selected = true;
+      categorySelect.appendChild(opt);
+    });
+  }
+
+  typeSelect.addEventListener('change', function () { fillCategories(''); });
+
+  modalEl.addEventListener('show.bs.modal', function (event) {
+    clearError();
+    form.reset();
+    document.getElementById('finance_id').value = '';
+    document.getElementById('finance_date').value = "{{ today|date:'Y-m-d' }}";
+    document.getElementById('financeModalTitle').textContent = 'Add entry';
+    document.getElementById('financeSubmitBtn').textContent = 'Save entry';
+    typeSelect.value = 'expense';
+    fillCategories('');
+    document.getElementById('finance_bird').value = '';
+    const button = event.relatedTarget;
+    if (!button || button.dataset.mode !== 'edit') return;
+    document.getElementById('financeModalTitle').textContent = 'Edit entry';
+    document.getElementById('financeSubmitBtn').textContent = 'Save changes';
+    document.getElementById('finance_id').value = button.dataset.id || '';
+    typeSelect.value = button.dataset.entryType || 'expense';
+    fillCategories(button.dataset.category || '');
+    document.getElementById('finance_amount').value = button.dataset.amount || '';
+    document.getElementById('finance_date').value = button.dataset.date || "{{ today|date:'Y-m-d' }}";
+    document.getElementById('finance_description').value = button.dataset.description || '';
+    document.getElementById('finance_bird').value = button.dataset.birdId || '';
+    document.getElementById('finance_notes').value = button.dataset.notes || '';
+  });
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    clearError();
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+    const btn = document.getElementById('financeSubmitBtn');
+    btn.disabled = true;
+    fetch(SAVE_URL, { method: 'POST', headers: { 'X-CSRFToken': csrfToken() }, body: new FormData(form) })
+      .then(async function (r) { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not save entry.'); return d; })
+      .then(function (d) { bootstrap.Modal.getOrCreateInstance(modalEl).hide(); showAlert(d.message || 'Saved.', 'success'); refresh(); })
+      .catch(function (e) { showError(e.message); })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  table.addEventListener('click', function (event) {
+    const button = event.target.closest('.finance-delete-btn');
+    if (!button) return;
+    if (!window.confirm('Delete this financial entry? This cannot be undone.')) return;
+    button.disabled = true;
+    fetch(button.dataset.deleteUrl, { method: 'POST', headers: { 'X-CSRFToken': csrfToken() } })
+      .then(async function (r) { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not delete entry.'); return d; })
+      .then(function (d) { showAlert(d.message || 'Deleted.', 'success'); refresh(); })
+      .catch(function (e) { showAlert(e.message, 'danger'); button.disabled = false; });
+  });
+})();
+</script>
+{% endblock %}

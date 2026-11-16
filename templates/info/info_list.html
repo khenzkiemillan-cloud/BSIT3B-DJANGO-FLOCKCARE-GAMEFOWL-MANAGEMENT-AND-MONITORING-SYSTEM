@@ -21,12 +21,6 @@
       </div>
       <div class="col-12 col-md-auto">
         <div class="btn-list">
-          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#importModal">
-            <i class="fas fa-file-import me-2"></i>Import CSV
-          </button>
-          <a href="{% url 'info:export_flock_csv' %}" class="btn btn-outline-secondary">
-            <i class="fas fa-file-csv me-2"></i>Export CSV
-          </a>
           {% if status != 'Conditioning' %}
           <button type="button"
                   class="btn btn-primary"
@@ -89,22 +83,24 @@
     <form id="quickConditioningForm" novalidate>
       {% csrf_token %}
       <div class="card-body">
-        <div class="dh-form-requirements mb-3">
-          <span class="dh-req-title">Conditioning requirements</span>
-          <ul>
-            <li><span class="text-danger">*</span> Bird</li>
-            <li><span class="text-danger">*</span> Start date</li>
-            <li><span class="text-danger">*</span> Target / fight weight</li>
-            <li><span class="text-danger">*</span> Conditioning program</li>
-            <li><span class="text-danger">*</span> Feed / diet plan</li>
-            <li>Current weight (optional)</li>
-          </ul>
+        <div class="dh-form-intro">
+          <div class="dh-form-requirements">
+            <span class="dh-req-title">Conditioning requirements</span>
+            <ul>
+              <li><span class="text-danger">*</span> Bird</li>
+              <li><span class="text-danger">*</span> Start date</li>
+              <li><span class="text-danger">*</span> Target / fight weight</li>
+              <li><span class="text-danger">*</span> Conditioning program</li>
+              <li><span class="text-danger">*</span> Feed / diet plan</li>
+              <li>Current weight (optional)</li>
+            </ul>
+          </div>
         </div>
-        <div class="row g-3">
+        <div class="row g-4 dh-form-grid">
           <div class="col-sm-6 col-lg-3">
             <label class="form-label required" for="quick_cond_bird">Bird</label>
             <select name="bird_id" id="quick_cond_bird" class="form-select" required>
-              <option value="">— Select bird —</option>
+              <option value="">Select a bird</option>
               {% for bird in farm_birds %}
                 <option value="{{ bird.id }}">
                   {{ bird.tag_number }} — {{ bird.gender }} • {{ bird.status }}
@@ -144,7 +140,7 @@
           <div class="col-sm-6 col-lg-3">
             <label class="form-label" for="quick_cond_weight">Current weight (g)</label>
             <input type="number" name="weight_grams" id="quick_cond_weight"
-                   class="form-control" min="0" step="1" placeholder="Optional">
+                   class="form-control" min="0" step="1" placeholder="e.g. 2150">
           </div>
         </div>
         <div id="quickConditioningError" class="alert alert-danger d-none mt-3 mb-0" role="alert"></div>
@@ -170,7 +166,7 @@
                name="q"
                value="{{ query }}"
                class="form-control"
-               placeholder="Search by tag, breed, gender, status, sire or dam...">
+               placeholder="Search by tag, breed, gender, status, sire or dam">
         {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
         {% if query or status %}
         <a href="{% url 'info:info_list' %}" class="btn btn-outline-secondary">Clear</a>
@@ -501,7 +497,7 @@
             <div class="dh-form-tab-body">
               <div class="dh-form-tab-pane is-active" id="memberTabFlock" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabFlockBtn" aria-hidden="false">
                 <div class="dh-form-section-title mb-3">Flock requirements</div>
-                <div class="row g-3">
+                <div class="row g-4 dh-form-grid">
                   <div class="col-md-6">
                     <label class="form-label required">Tag / Band number</label>
                     <input type="text" name="tag_number" id="member_tag_number" class="form-control" maxlength="50" required>
@@ -513,7 +509,7 @@
                   <div class="col-md-6">
                     <label class="form-label">Breed / Bloodline</label>
                     <select name="breed" id="member_breed" class="form-select">
-                      <option value="">— Select breed —</option>
+                      <option value="">Select a breed</option>
                       {% for breed in breeds %}
                       <option value="{{ breed.id }}">{{ breed.name }}</option>
                       {% endfor %}
@@ -560,7 +556,7 @@
 
               <div class="dh-form-tab-pane" id="memberTabBreeding" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabBreedingBtn" aria-hidden="true" hidden>
                 <div class="dh-form-section-title mb-3">Breeding requirements (optional)</div>
-                <div class="row g-3">
+                <div class="row g-4 dh-form-grid">
                   <div class="col-md-6">
                     <label class="form-label">Sire (tag / bloodline)</label>
                     <input type="text" name="sire" id="member_sire" class="form-control" maxlength="50" list="birdTagSuggestions" placeholder="e.g. K-101 or Pure Kelso">
@@ -585,7 +581,7 @@
               <div class="dh-form-tab-pane" id="memberTabConditioning" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabConditioningBtn" aria-hidden="true" hidden>
                 <div class="dh-form-section-title mb-1">Conditioning requirements</div>
                 <p class="text-secondary small mb-3">These fields are required when the bird's status is set to <strong>Conditioning</strong>.</p>
-                <div class="row g-3">
+                <div class="row g-4 dh-form-grid">
                   <div class="col-md-6">
                     <label class="form-label" data-conditioning-label>Conditioning start date</label>
                     <input type="date" name="conditioning_start_date" id="member_conditioning_start_date" class="form-control">
@@ -634,7 +630,7 @@
 
               <div class="dh-form-tab-pane" id="memberTabConformation" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabConformationBtn" aria-hidden="true" hidden>
                 <div class="dh-form-section-title mb-3">Physical conformation &amp; photo</div>
-                <div class="row g-3">
+                <div class="row g-4 dh-form-grid">
                   <div class="col-md-4">
                     <label class="form-label">Comb type</label>
                     <select name="comb_type" id="member_comb_type" class="form-select">
@@ -758,7 +754,7 @@
             </div>
 
             <div class="dh-form-tab-pane is-active" id="birdHealthTabDetails" data-form-tab-pane role="tabpanel" aria-labelledby="birdHealthTabDetailsBtn" aria-hidden="false">
-              <div class="row g-3">
+              <div class="row g-4 dh-form-grid">
                 <div class="col-md-6">
                   <label class="form-label required">Record type</label>
                   <select name="record_type" id="health_record_type" class="form-select" required>
@@ -771,7 +767,7 @@
                 <div class="col-md-6">
                   <label class="form-label">Medicine / treatment used</label>
                   <select id="bird_medicine_picker" class="form-select">
-                    <option value="">— Select from cabinet or common list —</option>
+                    <option value="">Select a medicine</option>
                     <optgroup label="My medicine cabinet">
                       {% for med in medicine_options %}
                       {% if med.in_cabinet %}
@@ -805,7 +801,7 @@
             </div>
 
             <div class="dh-form-tab-pane" id="birdHealthTabSchedule" data-form-tab-pane role="tabpanel" aria-labelledby="birdHealthTabScheduleBtn" aria-hidden="true" hidden>
-              <div class="row g-3">
+              <div class="row g-4 dh-form-grid">
                 <div class="col-md-6">
                   <label class="form-label required">Date administered</label>
                   <input type="date" name="date_administered" id="health_date_administered" class="form-control" required>
@@ -824,7 +820,7 @@
 
             <div class="dh-form-tab-pane" id="birdHealthTabNotes" data-form-tab-pane role="tabpanel" aria-labelledby="birdHealthTabNotesBtn" aria-hidden="true" hidden>
               <label class="form-label">Notes</label>
-              <textarea name="notes" id="health_notes" class="form-control" rows="2" placeholder="Dosage, reaction, or other observations..."></textarea>
+              <textarea name="notes" id="health_notes" class="form-control" rows="2" placeholder="e.g. dosage, reaction, or other observations"></textarea>
               <div class="dh-form-tab-actions">
                 <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
                 <span class="dh-form-tab-hint ms-auto">All set — click <strong>Add health record</strong> when ready.</span>
@@ -854,7 +850,7 @@
       <div class="modal-body">
         <div id="pedigreeError" class="alert alert-danger d-none"></div>
 
-        <div class="row g-3">
+        <div class="row g-4 dh-form-grid">
           <div class="col-12">
             <div class="card bg-primary-lt border-0">
               <div class="card-body py-3 text-center">
@@ -910,39 +906,6 @@
   </div>
 </div>
 
-<!-- CSV Import Modal -->
-<div class="modal modal-blur fade" id="importModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <form action="{% url 'info:import_flock_csv' %}" method="POST" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div class="modal-header">
-          <span class="dh-modal-icon is-primary"><i class="fas fa-file-import"></i></span>
-          <h5 class="modal-title">Import Flock from CSV</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <p class="text-muted small mb-3">
-            Upload a CSV spreadsheet with bird records. If a tag number already exists in your flock, its details will be updated.
-          </p>
-          <div class="mb-3">
-            <label class="form-label required">Choose CSV File</label>
-            <input type="file" name="csv_file" class="form-control" accept=".csv" required>
-          </div>
-          <div class="alert alert-info py-2 small mb-0">
-            <strong>Expected Columns:</strong><br>
-            <code>Tag Number, Breed, Gender, Status, Birth Date, Weight (g), Wins, Losses, Draws, Comb Type, Leg Color, Color, Cage Number, Sire, Dam</code>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary"><i class="fas fa-upload me-1"></i>Upload &amp; Import</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
 <!-- Fight Records Modal -->
 <div class="modal modal-blur fade" id="fightModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -976,7 +939,7 @@
           {% csrf_token %}
           <input type="hidden" name="bird_id" id="fight_bird_id">
           <input type="hidden" name="record_id" id="fight_record_id">
-          <div class="row g-3">
+          <div class="row g-4 dh-form-grid">
             <div class="col-md-6">
               <label class="form-label required">Event / Derby name</label>
               <input type="text" name="event_name" id="fight_event_name" class="form-control" placeholder="e.g. 4-Cock Derby or Local Hackfight" required>

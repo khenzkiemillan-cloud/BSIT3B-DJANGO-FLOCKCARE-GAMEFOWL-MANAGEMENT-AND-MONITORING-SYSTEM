@@ -3,7 +3,7 @@ from django import forms
 from .choices import CONDITIONING_PROGRAMS
 from .models import (
     FlockMember, HealthRecord, Medicine,
-    FightRecord, WeightLog, BreedingPen, ClutchRecord
+    FightRecord, WeightLog, BreedingPen, ClutchRecord, FinancialEntry
 )
 
 
@@ -313,4 +313,46 @@ class ClutchRecordForm(forms.ModelForm):
         if date_started and hatch_date and hatch_date < date_started:
             self.add_error('hatch_date', 'Hatch date cannot be before the date started.')
 
+        return cleaned_data
+
+
+class FinancialEntryForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        if self.user is not None and not getattr(self.user, 'is_anonymous', False):
+            self.fields['bird'].queryset = FlockMember.objects.filter(user=self.user).order_by('tag_number')
+        else:
+            self.fields['bird'].queryset = FlockMember.objects.none()
+        self.fields['bird'].required = False
+
+    class Meta:
+        model = FinancialEntry
+        fields = ['entry_type', 'category', 'amount', 'date', 'description', 'bird', 'notes']
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'amount': forms.NumberInput(attrs={'min': '0.01', 'step': '0.01'}),
+        }
+
+    def clean_description(self):
+        description = (self.cleaned_data.get('description') or '').strip()
+        if not description:
+            raise forms.ValidationError('Description is required.')
+        return description
+
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        if amount is None or amount <= 0:
+            raise forms.ValidationError('Amount must be greater than zero.')
+        return amount
+
+    def clean(self):
+        cleaned_data = super().clean()
+        entry_type = cleaned_data.get('entry_type')
+        category = cleaned_data.get('category')
+        if entry_type and category:
+            valid = FinancialEntry.EXPENSE_CATEGORIES if entry_type == FinancialEntry.TYPE_EXPENSE else FinancialEntry.INCOME_CATEGORIES
+            valid_keys = {k for k, _ in valid}
+            if category not in valid_keys:
+                cleaned_data['category'] = 'Other' if entry_type == FinancialEntry.TYPE_EXPENSE else 'Other'
         return cleaned_data

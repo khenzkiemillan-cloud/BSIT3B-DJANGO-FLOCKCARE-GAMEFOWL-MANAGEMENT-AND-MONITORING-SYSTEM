@@ -18,9 +18,6 @@
       </div>
       <div class="col-12 col-md-auto">
         <div class="btn-list">
-          <a href="{% url 'info:export_health_csv' %}" class="btn btn-outline-secondary">
-            <i class="fas fa-file-csv me-2"></i>Export CSV
-          </a>
           <button type="button"
                   class="btn btn-primary"
                   data-bs-toggle="modal"
@@ -91,11 +88,11 @@
             <li>Next due date &amp; notes</li>
           </ul>
         </div>
-        <div class="row g-3">
+        <div class="row g-4 dh-form-grid">
           <div class="col-sm-6 col-lg-3">
             <label class="form-label required" for="quick_health_bird">Bird</label>
             <select name="bird_id" id="quick_health_bird" class="form-select" required>
-              <option value="">— Select bird —</option>
+              <option value="">Select a bird</option>
               {% for bird in birds %}
                 <option value="{{ bird.id }}">{{ bird.tag_number }} — {{ bird.gender }}</option>
               {% endfor %}
@@ -112,7 +109,7 @@
           <div class="col-sm-6 col-lg-3">
             <label class="form-label" for="quick_health_medicine">Medicine / treatment used</label>
             <select id="quick_health_medicine" class="form-select">
-              <option value="">— Select from cabinet or common list —</option>
+              <option value="">Select a medicine</option>
               <optgroup label="My medicine cabinet">
                 {% for med in medicine_options %}
                   {% if med.in_cabinet %}
@@ -152,7 +149,7 @@
           <div class="col-sm-6 col-lg-6">
             <label class="form-label" for="quick_health_notes">Notes</label>
             <input type="text" name="notes" id="quick_health_notes" class="form-control"
-                   placeholder="Dosage, reaction, or other observations">
+                   placeholder="e.g. dosage, reaction, or other observations">
           </div>
         </div>
         <div id="quickHealthError" class="alert alert-danger d-none mt-3 mb-0" role="alert"></div>
@@ -175,7 +172,7 @@
                name="q"
                value="{{ query }}"
                class="form-control"
-               placeholder="Search by bird tag, title, type or notes...">
+               placeholder="Search by bird tag, title, type or notes">
         <select name="record_type" class="form-select" aria-label="Filter by record type">
           <option value="">All types</option>
           {% for value, label in record_types %}
@@ -407,11 +404,11 @@
 
             <div class="dh-form-tab-pane is-active" id="healthTabDetails" data-form-tab-pane role="tabpanel" aria-labelledby="healthTabDetailsBtn" aria-hidden="false">
               <div class="dh-form-section-title mb-3">Health requirements</div>
-              <div class="row g-3">
+              <div class="row g-4 dh-form-grid">
                 <div class="col-md-6">
                   <label class="form-label required">Bird</label>
                   <select name="bird_id" id="health_bird_id" class="form-select" required>
-                    <option value="">— Select bird —</option>
+                    <option value="">Select a bird</option>
                     {% for bird in birds %}
                     <option value="{{ bird.id }}">{{ bird.tag_number }} — {{ bird.gender }}</option>
                     {% endfor %}
@@ -431,7 +428,7 @@
                 <div class="col-md-6">
                   <label class="form-label">Medicine / treatment used</label>
                   <select id="health_medicine_picker" class="form-select">
-                    <option value="">— Select from cabinet or common list —</option>
+                    <option value="">Select a medicine</option>
                     <optgroup label="My medicine cabinet">
                       {% for med in medicine_options %}
                       {% if med.in_cabinet %}
@@ -467,7 +464,7 @@
 
             <div class="dh-form-tab-pane" id="healthTabSchedule" data-form-tab-pane role="tabpanel" aria-labelledby="healthTabScheduleBtn" aria-hidden="true" hidden>
               <div class="dh-form-section-title mb-3">Dates &amp; follow-up</div>
-              <div class="row g-3">
+              <div class="row g-4 dh-form-grid">
                 <div class="col-md-6">
                   <label class="form-label required">Date administered</label>
                   <input type="date" name="date_administered" id="health_date_administered" class="form-control" required>
@@ -487,7 +484,7 @@
             <div class="dh-form-tab-pane" id="healthTabNotes" data-form-tab-pane role="tabpanel" aria-labelledby="healthTabNotesBtn" aria-hidden="true" hidden>
               <div class="dh-form-section-title mb-3">Additional notes</div>
               <label class="form-label">Notes</label>
-              <textarea name="notes" id="health_notes" class="form-control" rows="3" placeholder="Dosage, reaction, or other observations..."></textarea>
+              <textarea name="notes" id="health_notes" class="form-control" rows="3" placeholder="e.g. dosage, reaction, or other observations"></textarea>
               <div class="dh-form-tab-actions">
                 <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
                 <span class="dh-form-tab-hint ms-auto">All set — click <strong>Save health record</strong> when ready.</span>

@@ -38,17 +38,18 @@ urlpatterns = [
     path('ajax/health/save/', views.health_record_save_ajax, name='health_record_save_ajax'),
     path('ajax/health/delete/<int:pk>/', views.health_record_delete_ajax, name='health_record_delete_ajax'),
     path('health/', views.health_list_page, name='health_list'),
-    path('health/export/csv/', views.export_health_csv, name='export_health_csv'),
 
     # Medicine cabinet
     path('medicines/', views.medicine_list_page, name='medicine_list'),
-    path('medicines/export/csv/', views.export_medicines_csv, name='export_medicines_csv'),
     path('ajax/medicines/save/', views.medicine_save_ajax, name='medicine_save_ajax'),
     path('ajax/medicines/delete/<int:pk>/', views.medicine_delete_ajax, name='medicine_delete_ajax'),
     path('ajax/medicines/restock/', views.medicine_restock_ajax, name='medicine_restock_ajax'),
 
-    # CSV Import / Export & Batch Actions
-    path('export/csv/', views.export_flock_csv, name='export_flock_csv'),
-    path('import/csv/', views.import_flock_csv, name='import_flock_csv'),
+    # Expenses / Financial tracker
+    path('finance/', views.finance_list_page, name='finance_list'),
+    path('ajax/finance/save/', views.finance_save_ajax, name='finance_save_ajax'),
+    path('ajax/finance/delete/<int:pk>/', views.finance_delete_ajax, name='finance_delete_ajax'),
+
+    # Batch Actions
     path('ajax/batch/', views.flock_batch_action_ajax, name='batch_action_ajax'),
 ]

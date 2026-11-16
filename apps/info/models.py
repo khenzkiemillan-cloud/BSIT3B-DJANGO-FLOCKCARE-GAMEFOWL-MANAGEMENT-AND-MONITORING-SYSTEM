@@ -273,3 +273,55 @@ class ClutchRecord(models.Model):
         if self.fertile_eggs > 0:
             return round((self.hatched_count / self.fertile_eggs) * 100, 1)
         return 0.0
+
+
+class FinancialEntry(models.Model):
+    TYPE_EXPENSE = 'expense'
+    TYPE_INCOME = 'income'
+    TYPE_CHOICES = [
+        (TYPE_EXPENSE, 'Expense'),
+        (TYPE_INCOME, 'Income'),
+    ]
+
+    EXPENSE_CATEGORIES = [
+        ('Feed', 'Feed & Supplements'),
+        ('Medicine', 'Medicine & Health'),
+        ('Equipment', 'Equipment & Supplies'),
+        ('Transport', 'Transport'),
+        ('Entry Fee', 'Entry Fee'),
+        ('Labor', 'Labor'),
+        ('Utilities', 'Utilities'),
+        ('Other', 'Other Expense'),
+    ]
+    INCOME_CATEGORIES = [
+        ('Bird Sale', 'Bird Sale'),
+        ('Prize Money', 'Prize Money'),
+        ('Stud Fee', 'Stud Fee'),
+        ('Other', 'Other Income'),
+    ]
+    CATEGORY_CHOICES = EXPENSE_CATEGORIES + INCOME_CATEGORIES
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='financial_entries')
+    bird = models.ForeignKey(
+        'FlockMember', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='financial_entries',
+        help_text='Optional flock member related to this entry (e.g. bird sale, treatment cost, entry fee).'
+    )
+    entry_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=TYPE_EXPENSE)
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='Feed')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    date = models.DateField()
+    description = models.CharField(max_length=200)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['user', 'entry_type']),
+        ]
+
+    def __str__(self):
+        sign = '-' if self.entry_type == self.TYPE_EXPENSE else '+'
+        return f"{sign}{self.amount} - {self.description}"

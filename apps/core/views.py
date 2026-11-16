@@ -14,7 +14,7 @@ from django.views.decorators.http import require_http_methods
 
 from apps.core.scoping import scoped_flock_members
 from apps.info.choices import COMMON_BREEDS
-from apps.info.models import Breed, HealthRecord, Medicine
+from apps.info.models import Breed, FinancialEntry, HealthRecord, Medicine
 
 User = get_user_model()
 MAX_FAILED_ATTEMPTS = 5
@@ -221,7 +221,17 @@ def home(request):
         Q(expiration_date__gte=today, expiration_date__lte=medicine_expiry_cutoff)
     ).count()
 
+    finance_totals = FinancialEntry.objects.filter(user=request.user).aggregate(
+        total_income=Sum('amount', filter=Q(entry_type=FinancialEntry.TYPE_INCOME)),
+        total_expenses=Sum('amount', filter=Q(entry_type=FinancialEntry.TYPE_EXPENSE)),
+    )
+    finance_income = finance_totals['total_income'] or 0
+    finance_expenses = finance_totals['total_expenses'] or 0
+
     context = {
+        'finance_income': finance_income,
+        'finance_expenses': finance_expenses,
+        'finance_net': finance_income - finance_expenses,
         'total_birds': total_birds,
         'active_birds': active_birds,
         'conditioning_birds': conditioning_birds,

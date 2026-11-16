@@ -43,7 +43,7 @@
     <form id="quickPenForm" novalidate>
       {% csrf_token %}
       <div class="card-body">
-        <div class="dh-form-requirements mb-3">
+        <div class="dh-form-requirements">
           <span class="dh-req-title">Breeding requirements</span>
           <ul>
             <li><span class="text-danger">*</span> Pen number / identifier</li>
@@ -54,7 +54,7 @@
             <li>Notes / expected bloodline</li>
           </ul>
         </div>
-        <div class="row g-3">
+        <div class="row g-4 dh-form-grid">
           <div class="col-sm-6 col-lg-2">
             <label class="form-label required" for="qpen_number">Pen number</label>
             <input type="text" name="pen_number" id="qpen_number" class="form-control"
@@ -63,7 +63,7 @@
           <div class="col-sm-6 col-lg-3">
             <label class="form-label required" for="qpen_sire">Broodcock / Stag (Sire)</label>
             <select name="sire" id="qpen_sire" class="form-select" required>
-              <option value="">— Select sire —</option>
+              <option value="">Select a sire</option>
               {% for c in cocks %}
                 <option value="{{ c.id }}">
                   {{ c.tag_number }} — {{ c.breed.name|default:"Unclassified" }} • {{ c.gender }}
@@ -74,7 +74,7 @@
           <div class="col-sm-6 col-lg-3">
             <label class="form-label required" for="qpen_dam">Broodhen / Pullet (Dam)</label>
             <select name="dam" id="qpen_dam" class="form-select" required>
-              <option value="">— Select dam —</option>
+              <option value="">Select a dam</option>
               {% for h in hens %}
                 <option value="{{ h.id }}">
                   {{ h.tag_number }} — {{ h.breed.name|default:"Unclassified" }} • {{ h.gender }}
@@ -300,11 +300,11 @@
                   <label class="form-label required">Pen number / identifier</label>
                   <input type="text" name="pen_number" id="pen_number" class="form-control" placeholder="e.g. Pen 101" required>
                 </div>
-                <div class="row g-3">
+                <div class="row g-4 dh-form-grid">
                   <div class="col-6">
                     <label class="form-label required">Broodcock / Stag (Sire)</label>
                     <select name="sire" id="pen_sire" class="form-select" required>
-                      <option value="">Select Sire...</option>
+                      <option value="">Select a sire</option>
                       {% for c in cocks %}
                         <option value="{{ c.id }}"
                                 data-breed="{{ c.breed.name|default:'Unclassified' }}"
@@ -319,7 +319,7 @@
                   <div class="col-6">
                     <label class="form-label required">Broodhen / Pullet (Dam)</label>
                     <select name="dam" id="pen_dam" class="form-select" required>
-                      <option value="">Select Dam...</option>
+                      <option value="">Select a dam</option>
                       {% for h in hens %}
                         <option value="{{ h.id }}"
                                 data-breed="{{ h.breed.name|default:'Unclassified' }}"
@@ -332,7 +332,7 @@
                     </select>
                   </div>
                 </div>
-                <div class="row g-3 mt-1">
+                <div class="row g-4 dh-form-grid mt-1">
                   <div class="col-md-6">
                     <div class="alert alert-info py-2 small mb-0" id="sirePreview">
                       <i class="fas fa-circle-info me-1"></i>Select a sire to see its breed, status, and record.
@@ -352,7 +352,7 @@
 
               <div class="dh-form-tab-pane" id="penTabSchedule" data-form-tab-pane role="tabpanel" aria-labelledby="penTabScheduleBtn" aria-hidden="true" hidden>
                 <div class="dh-form-section-title mb-3">Pairing schedule</div>
-                <div class="row g-3">
+                <div class="row g-4 dh-form-grid">
                   <div class="col-6">
                     <label class="form-label required">Date paired</label>
                     <input type="date" name="date_paired" id="pen_date_paired" class="form-control" value="{% now 'Y-m-d' %}" required>
@@ -421,7 +421,7 @@
 
               <div class="dh-form-tab-pane is-active" id="clutchTabDetails" data-form-tab-pane role="tabpanel" aria-labelledby="clutchTabDetailsBtn" aria-hidden="false">
                 <div class="dh-form-section-title mb-3">Clutch requirements</div>
-                <div class="row g-3">
+                <div class="row g-4 dh-form-grid">
                   <div class="col-6">
                     <label class="form-label">Clutch # / Batch</label>
                     <input type="text" name="clutch_number" class="form-control" placeholder="e.g. C-01">
@@ -439,7 +439,7 @@
 
               <div class="dh-form-tab-pane" id="clutchTabEggs" data-form-tab-pane role="tabpanel" aria-labelledby="clutchTabEggsBtn" aria-hidden="true" hidden>
                 <div class="dh-form-section-title mb-3">Egg &amp; hatch counts</div>
-                <div class="row g-3">
+                <div class="row g-4 dh-form-grid">
                   <div class="col-4">
                     <label class="form-label">Eggs collected</label>
                     <input type="number" name="eggs_collected" class="form-control" min="0" value="0">

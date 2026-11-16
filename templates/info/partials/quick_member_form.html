@@ -14,21 +14,23 @@
   <form id="quickMemberForm" novalidate>
     {% csrf_token %}
     <div class="card-body">
-      <div class="dh-form-requirements mb-3">
-        <span class="dh-req-title">Flock requirements</span>
-        <ul>
-          <li><span class="text-danger">*</span> Tag / band number</li>
-          <li><span class="text-danger">*</span> Gender</li>
-          <li><span class="text-danger">*</span> Status</li>
-          <li>Breed / bloodline (or add a new one)</li>
-          <li>Hatch date, weight and cage (optional)</li>
-        </ul>
+      <div class="dh-form-intro">
+        <div class="dh-form-requirements">
+          <span class="dh-req-title">Flock requirements</span>
+          <ul>
+            <li><span class="text-danger">*</span> Tag / band number</li>
+            <li><span class="text-danger">*</span> Gender</li>
+            <li><span class="text-danger">*</span> Status</li>
+            <li>Breed / bloodline (or add a new one)</li>
+            <li>Hatch date, weight and cage (optional)</li>
+          </ul>
+        </div>
+        <p class="text-muted small mb-0">
+          <i class="fas fa-circle-info me-1" aria-hidden="true"></i>
+          To place a bird in <strong>Conditioning</strong>, use the Conditioning page or the full form so you can provide the separate conditioning requirements (start date, target weight, program, and feed plan).
+        </p>
       </div>
-      <p class="text-muted small mb-3">
-        <i class="fas fa-circle-info me-1" aria-hidden="true"></i>
-        To place a bird in <strong>Conditioning</strong>, use the Conditioning page or the full form so you can provide the separate conditioning requirements (start date, target weight, program, and feed plan).
-      </p>
-      <div class="row g-3">
+      <div class="row g-4 dh-form-grid">
         <div class="col-sm-6 col-lg-3">
           <label class="form-label required" for="quick_member_tag">Tag / Band number</label>
           <input type="text" name="tag_number" id="quick_member_tag" class="form-control"
@@ -57,7 +59,7 @@
         <div class="col-sm-6 col-lg-3">
           <label class="form-label" for="quick_member_breed">Breed / Bloodline</label>
           <select name="breed" id="quick_member_breed" class="form-select">
-            <option value="">— Select breed —</option>
+            <option value="">Select a breed</option>
             {% for breed in breeds %}
               <option value="{{ breed.id }}">{{ breed.name }}</option>
             {% endfor %}
