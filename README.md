@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # FlockCare — Gamefowl Management & Monitoring System
 
 Django application for tracking gamefowl flock members, health schedules,
@@ -87,3 +88,58 @@ python manage.py test
 ```
 
 Tests automatically use an in-memory SQLite database.
+=======
+BSIT Class Project Concept Paper
+
+FLOCKCARE: DEVELOPMENT OF A WEB-BASED GAMEFOWL
+MANAGEMENT AND MONITORING SYSTEM
+BSIT Capstone Project Concept Paper
+
+INTRODUCTION
+Background of the Project
+Gamefowl breeding and farm management require consistent monitoring of flock bloodlines, conditioning schedules, health regimens, and medical inventory. However, many local gamefowl farms and backyard breeders still rely on manual logbooks, handwritten notebooks, and scattered spreadsheets to record bird profiles, vaccination dates, conditioning routines, and medicine stock levels. This traditional record-keeping approach frequently results in missed vaccination or deworming boosters, expired or depleted medical supplies, inaccurate win-loss and lineage tracking, and disorganized preparation prior to derby events.
+To address these operational challenges, the proposed project will focus on developing FlockCare, a centralized, web-based Gamefowl Management and Monitoring System. The web application will digitize flock profiling, automate health and vaccination reminder alerts, track conditioning and breeding records, and monitor medicine cabinet inventory with expiration notifications, providing an organized, reliable, and data-driven management platform for breeders and farm caretakers.
+
+Statement of the Problem or Project Objectives
+The main objective of this project is to design, develop, and evaluate FlockCare, a web-based Gamefowl Management and Monitoring System, to streamline flock record-keeping, health scheduling, and medical inventory management.
+Specifically, the project aims to accomplish the following technical objectives:
+
+Develop a centralized flock profiling module that records individual bird identifiers (wingband or legband tags), bloodline breeds, gender classifications (Stag, Cock, Broodcock, Pullet), status categories (Active, In Conditioning, Broodcock, Retired), and win-loss-draw performance records.
+Implement a health care scheduling and automated reminder module that logs vaccinations, deworming, vitamins, and treatments while flagging overdue and upcoming due-within-30-days follow-ups.
+Integrate a conditioning and breeding management module to monitor workout routines, recovery treatments, and lineage pairings across the flock.
+Develop a medicine cabinet inventory module with category filtering, stock level alerts (Low Stock, Out of Stock), and expiration tracking (Expiring in 30 Days, Expired) to ensure timely restocking.
+ Build an analytics dashboard summarizing total flock population, active birds, conditioning counts, overall win rate, and overdue health alerts, and conduct user acceptance testing (UAT) with breeders and farm handlers to evaluate usability and system performance.
+Significance of the Project
+Alignment with Institutional Research Agenda and Sustainable Development Goals
+• Institutional Research Agenda Alignment: Aligns with the Institutional Information Technology and Agricultural Modernization Research priority by leveraging web-based software solutions to digitize livestock management and improve farm productivity.
+
+The proposed system will provide direct practical value to the following beneficiaries:
+
+• Gamefowl Breeders and Farm Owners: Centralizes bloodline records, competitive win-loss analytics, and breeding lineages, enabling informed selection and strategic farm management.
+• Farm Handlers and Caretakers: Eliminates missed vaccinations, deworming schedules, and supplement administrations through automated overdue and upcoming health care alerts.
+• Farm Supply and Inventory Custodians: Prevents medicine stockouts and spoilage by tracking real-time stock quantities, low-stock thresholds, and upcoming expiration dates.
+• Future Researchers and IT Students: Serves as a practical reference framework for developing Django-based agricultural and livestock management information systems.
+
+• Sustainable Development Goal Alignment:
+o SDG 9 (Industry, Innovation, and Infrastructure): Fosters technological innovation in local agricultural and livestock operations through accessible digital record-keeping and automated monitoring tools.
+o SDG 12 (Responsible Consumption and Production): Promotes efficient inventory management of veterinary medicines and supplements, minimizing waste from expired supplies and supporting responsible animal health care.
+
+SCOPE AND LIMITATIONS
+System Scope & Technical Architecture
+Component	Description & Coverage
+Core Modules	Executive Summary Dashboard, Flock Profiling & Bloodline Management, Conditioning Tracker, Breeding Records, Health Care & Vaccination Schedule with Overdue Alerts, and Medicine Cabinet Inventory Management.
+Technology Stack	Web-based architecture utilizing Python and the Django Web Framework for backend processing, SQLite/MySQL for relational database management, and HTML5, CSS3, and JavaScript for a responsive dark-themed user interface.
+Target Users	Gamefowl Breeders, Farm Owners, Conditioning Handlers, and Farm Caretakers managing flock health, training, and veterinary supplies.
+
+Limitations
+• The system will operate as a local server or web-hosted application tailored for individual or single-farm gamefowl management and does not support multi-farm marketplace transactions.
+
+• SMS gateway notifications, mobile push notifications, automated RFID/barcode hardware scanning, and financial accounting modules are excluded from the current development phase and may be recommended for future enhancements.
+
+
+
+Member:
+Mark Aldrin Millan
+Brent Justine Maigue
+Gino Polohimon
+>>>>>>> 99ec06e83d34d65b67a581e104ff3c5def81271f
