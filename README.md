@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-# FlockCare — Gamefowl Management & Monitoring System
+FlockCare — Gamefowl Management & Monitoring System
 
 Django application for tracking gamefowl flock members, health schedules,
 fight records, breeding pens, and medicines.
