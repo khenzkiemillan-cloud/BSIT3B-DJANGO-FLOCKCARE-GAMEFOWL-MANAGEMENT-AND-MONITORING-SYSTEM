@@ -14,7 +14,6 @@ from django.db.models import Count, Q
 from django.views.decorators.http import require_POST
 
 from .models import UserProfile
-from .forms import UserProfileForm
 
 
 def _is_superuser(user):
@@ -141,6 +140,7 @@ def user_get_ajax(request, pk):
         "last_name":  user.last_name,
         "email":      user.email,
         "is_staff":   user.is_staff,
+        "is_superuser": user.is_superuser,
         "is_active":  user.is_active,
     })
 
@@ -185,14 +185,22 @@ def user_save_ajax(request):
         return JsonResponse({"error": "That email is already in use."}, status=400)
 
     is_active = request.POST.get("is_active") == "true"
-    if user_id and user.pk == request.user.pk and not is_active:
-        return JsonResponse({"error": "You cannot deactivate your own account."}, status=400)
+    is_superuser = request.POST.get("is_superuser") == "true"
+    if user_id and user.pk == request.user.pk:
+        if not is_active:
+            return JsonResponse({"error": "You cannot deactivate your own account."}, status=400)
+        if user.is_superuser and not is_superuser:
+            return JsonResponse(
+                {"error": "You cannot remove your own administrator access."},
+                status=400,
+            )
 
     user.username   = username
     user.first_name = request.POST.get("first_name", "").strip()
     user.last_name  = request.POST.get("last_name", "").strip()
     user.email      = email
-    user.is_staff   = request.POST.get("is_staff") == "true"
+    user.is_staff   = request.POST.get("is_staff") == "true" or is_superuser
+    user.is_superuser = is_superuser
     user.is_active  = is_active
 
     password = request.POST.get("password")
@@ -223,6 +231,7 @@ def user_save_ajax(request):
         "last_name": user.last_name,
         "email": user.email,
         "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
         "is_active": user.is_active,
     })
 

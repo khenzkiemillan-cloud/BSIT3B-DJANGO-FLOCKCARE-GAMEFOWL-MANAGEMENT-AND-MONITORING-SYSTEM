@@ -63,7 +63,26 @@ body {
   font-feature-settings: "cv02", "cv03", "cv11";
   letter-spacing: -0.01em;
   background-color: var(--tblr-body-bg);
+  background-image:
+    repeating-linear-gradient(45deg, rgba(35, 39, 65, 0.022) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(-45deg, rgba(35, 39, 65, 0.022) 0 1px, transparent 1px 22px),
+    radial-gradient(58rem 36rem at 5% -10%, rgba(var(--tblr-primary-rgb), 0.16), transparent 62%),
+    radial-gradient(44rem 30rem at 104% 0%, rgba(248, 184, 78, 0.16), transparent 60%),
+    radial-gradient(60rem 40rem at 55% 118%, rgba(16, 185, 129, 0.09), transparent 66%),
+    linear-gradient(180deg, #fafbff 0%, #f3f4fb 46%, #eceffa 100%);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
+}
+
+[data-bs-theme="dark"] body,
+body[data-bs-theme="dark"] {
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 24px),
+    radial-gradient(58rem 36rem at 5% -10%, rgba(var(--tblr-primary-rgb), 0.22), transparent 62%),
+    radial-gradient(44rem 30rem at 104% 0%, rgba(248, 184, 78, 0.11), transparent 60%),
+    radial-gradient(60rem 40rem at 55% 118%, rgba(16, 185, 129, 0.09), transparent 66%),
+    linear-gradient(180deg, #0f1224 0%, #0b0e1d 52%, #090b16 100%);
 }
 
 html {
@@ -71,7 +90,7 @@ html {
 }
 
 .page {
-  background-color: var(--tblr-body-bg);
+  background-color: transparent;
 }
 
 .page-body {
@@ -81,11 +100,11 @@ html {
 
 .page-body,
 .page-wrapper {
-  background-color: var(--tblr-body-bg);
+  background-color: transparent;
 }
 
 #page-body {
-  background-color: var(--tblr-body-bg);
+  background-color: transparent;
 }
 
 .container-xl {
@@ -948,11 +967,10 @@ html {
    ================================================================== */
 
 /* --- Page surface -------------------------------------------------- */
+/* The atmospheric background lives on <body> so cards and page wrappers
+   stay transparent and the gradient can breathe behind the whole app. */
 .page {
-  background-image:
-    radial-gradient(60rem 30rem at 12% -10%, rgba(var(--tblr-primary-rgb), 0.09), transparent 60%),
-    radial-gradient(50rem 30rem at 110% 110%, rgba(248, 184, 78, 0.07), transparent 60%);
-  background-attachment: fixed;
+  background-image: none;
 }
 
 /* Slim, non-intrusive progress indicator used while Turbo frames load. */
@@ -1477,6 +1495,112 @@ body.auth-page {
   flex: 1 1 auto;
   height: 1px;
   background: var(--tblr-border-color);
+}
+
+/* --- Step tabs for long add/edit forms ---------------------------- */
+.dh-form-tabs {
+  margin-bottom: 0.25rem;
+}
+
+.dh-form-tab-nav {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  margin-bottom: 1.1rem;
+  overflow-x: auto;
+  border: 1px solid var(--tblr-border-color);
+  border-radius: 0.85rem;
+  background: var(--tblr-bg-surface-secondary);
+  scrollbar-width: thin;
+}
+
+.dh-form-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: var(--tblr-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dh-form-tab:hover,
+.dh-form-tab:focus-visible {
+  color: var(--tblr-body-color);
+  background: rgba(var(--tblr-primary-rgb), 0.07);
+}
+
+.dh-form-tab.is-active {
+  color: var(--tblr-primary);
+  background: var(--tblr-bg-surface);
+  box-shadow: 0 1px 2px rgba(35, 39, 65, 0.08), 0 6px 16px -12px rgba(35, 39, 65, 0.45);
+}
+
+.dh-form-tab-index {
+  display: inline-grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  color: var(--tblr-muted);
+  background: rgba(var(--tblr-muted-rgb), 0.14);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.dh-form-tab.is-active .dh-form-tab-index {
+  color: #fff;
+  background: var(--tblr-primary);
+}
+
+.dh-form-tab-pane[hidden] {
+  display: none !important;
+}
+
+.dh-form-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--tblr-border-color);
+}
+
+.dh-form-tab-hint {
+  color: var(--tblr-muted);
+  font-size: 0.78rem;
+}
+
+.dh-form-tab-actions .btn {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 575.98px) {
+  .dh-form-tab {
+    padding: 0.45rem 0.6rem;
+  }
+
+  .dh-form-tab-actions {
+    flex-wrap: wrap;
+  }
+
+  .dh-form-tab-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .dh-form-tab-hint {
+    flex: 1 1 100%;
+  }
 }
 
 /* --- Health record history ---------------------------------------- */
@@ -2337,6 +2461,121 @@ body.auth-page {
 [data-bs-theme="dark"] .dh-reminder-icon.is-danger {
   color: #fca5a5;
   background: rgba(239, 68, 68, 0.16);
+}
+
+/* --- Breeding pen records ----------------------------------------- */
+.dh-breed-bird {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--tblr-border-color);
+  border-radius: var(--tblr-border-radius);
+  background: var(--tblr-bg-surface-secondary);
+}
+
+.dh-breed-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.dh-breed-stat {
+  padding: 0.4rem 0.35rem;
+  text-align: center;
+  border-radius: var(--tblr-border-radius);
+  background: var(--tblr-bg-surface-secondary);
+}
+
+.dh-breed-stat-value {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.dh-breed-stat-label {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tblr-muted);
+}
+
+.dh-breed-records th {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tblr-muted);
+  white-space: nowrap;
+}
+
+.dh-breed-records td {
+  font-size: 0.8rem;
+  vertical-align: middle;
+}
+
+/* --- Inline add forms --------------------------------------------- */
+.dh-inline-form {
+  overflow: hidden;
+}
+
+.dh-inline-form .card-header {
+  background: var(--tblr-bg-surface-secondary);
+  border-bottom: 1px solid var(--tblr-border-color);
+}
+
+.dh-inline-form .card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+}
+
+.dh-inline-form .card-footer {
+  background: var(--tblr-bg-surface-secondary);
+}
+
+.dh-form-requirements {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.9rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px dashed var(--tblr-border-color);
+  border-radius: var(--tblr-border-radius);
+  background: var(--tblr-bg-surface-secondary);
+  font-size: 0.78rem;
+  color: var(--tblr-muted);
+}
+
+.dh-form-requirements .dh-req-title {
+  font-weight: 700;
+  color: var(--tblr-body-color);
+}
+
+.dh-form-requirements ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dh-form-requirements li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.dh-form-requirements li::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--tblr-primary);
 }
 
 /* --- Reduced motion ---------------------------------------------- */

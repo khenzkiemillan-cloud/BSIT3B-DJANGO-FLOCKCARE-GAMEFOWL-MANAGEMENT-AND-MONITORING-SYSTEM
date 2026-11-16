@@ -1,18 +1,61 @@
 from django import forms
 
+from .choices import CONDITIONING_PROGRAMS
 from .models import (
     FlockMember, HealthRecord, Medicine,
     FightRecord, WeightLog, BreedingPen, ClutchRecord
 )
 
 
+class ConditioningForm(forms.Form):
+    """Validate the conditioning requirements for an existing bird."""
+
+    conditioning_start_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    target_weight_grams = forms.IntegerField(min_value=1)
+    conditioning_program = forms.ChoiceField(
+        choices=[(program, program) for program in CONDITIONING_PROGRAMS] + [
+            ('Custom', 'Custom / other program'),
+        ],
+    )
+    conditioning_program_custom = forms.CharField(
+        max_length=100, required=False,
+    )
+    conditioning_feed_plan = forms.CharField(max_length=255)
+    weight_grams = forms.IntegerField(min_value=0, required=False)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get('conditioning_program') == 'Custom':
+            custom = (cleaned_data.get('conditioning_program_custom') or '').strip()
+            if not custom:
+                self.add_error(
+                    'conditioning_program_custom',
+                    'Enter the custom conditioning program.',
+                )
+            else:
+                cleaned_data['conditioning_program'] = custom
+        return cleaned_data
+
+
 class FlockMemberForm(forms.ModelForm):
     """Validate and save flock member records submitted from the UI."""
+
+    # Filled in on the Conditioning tab. They only become mandatory once the
+    # bird's status is set to Conditioning, so Active/Retired birds can still
+    # be saved without a conditioning plan.
+    CONDITIONING_REQUIRED_FIELDS = [
+        ('conditioning_start_date', 'Conditioning start date'),
+        ('target_weight_grams', 'Target / fight weight'),
+        ('conditioning_program', 'Conditioning program'),
+        ('conditioning_feed_plan', 'Feed / diet plan'),
+    ]
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        for optional_field in ['wins', 'losses', 'draws', 'weight_grams', 'comb_type', 'leg_color', 'color', 'cage_number', 'image', 'sire', 'dam', 'birth_date']:
+        for optional_field in ['wins', 'losses', 'draws', 'weight_grams', 'comb_type', 'leg_color', 'color', 'cage_number', 'image', 'sire', 'dam', 'birth_date', 'conditioning_start_date', 'target_weight_grams', 'conditioning_program', 'conditioning_feed_plan']:
             if optional_field in self.fields:
                 self.fields[optional_field].required = False
 
@@ -34,10 +77,15 @@ class FlockMemberForm(forms.ModelForm):
             'wins',
             'losses',
             'draws',
+            'conditioning_start_date',
+            'target_weight_grams',
+            'conditioning_program',
+            'conditioning_feed_plan',
             'image',
         ]
         widgets = {
             'birth_date': forms.DateInput(attrs={'type': 'date'}),
+            'conditioning_start_date': forms.DateInput(attrs={'type': 'date'}),
         }
 
     def clean_tag_number(self):
@@ -61,6 +109,20 @@ class FlockMemberForm(forms.ModelForm):
 
     def clean_dam(self):
         return (self.cleaned_data.get('dam') or '').strip()
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        if cleaned_data.get('status') == 'Conditioning':
+            for field_name, label in self.CONDITIONING_REQUIRED_FIELDS:
+                value = cleaned_data.get(field_name)
+                if value in (None, ''):
+                    self.add_error(
+                        field_name,
+                        f'{label} is required when the bird is in conditioning.',
+                    )
+
+        return cleaned_data
 
     def clean_image(self):
         image = self.cleaned_data.get('image')
@@ -174,6 +236,18 @@ class WeightLogForm(forms.ModelForm):
 
 
 class BreedingPenForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        # Only let a breeder pair their own birds. Without this a crafted POST
+        # could reference another user's flock member.
+        if self.user is not None and not getattr(self.user, 'is_anonymous', False):
+            members = FlockMember.objects.filter(user=self.user)
+        else:
+            members = FlockMember.objects.none()
+        self.fields['sire'].queryset = members
+        self.fields['dam'].queryset = members
+
     class Meta:
         model = BreedingPen
         fields = ['pen_number', 'sire', 'dam', 'date_paired', 'date_separated', 'status', 'notes']
@@ -181,6 +255,33 @@ class BreedingPenForm(forms.ModelForm):
             'date_paired': forms.DateInput(attrs={'type': 'date'}),
             'date_separated': forms.DateInput(attrs={'type': 'date'}),
         }
+
+    def clean_pen_number(self):
+        pen_number = (self.cleaned_data.get('pen_number') or '').strip()
+        if not pen_number:
+            raise forms.ValidationError('Pen number is required.')
+        return pen_number
+
+    def clean(self):
+        cleaned_data = super().clean()
+        sire = cleaned_data.get('sire')
+        dam = cleaned_data.get('dam')
+        date_paired = cleaned_data.get('date_paired')
+        date_separated = cleaned_data.get('date_separated')
+
+        if sire and dam and sire.pk == dam.pk:
+            raise forms.ValidationError('The sire and dam must be two different birds.')
+
+        if sire and sire.gender not in ('Cock', 'Stag'):
+            self.add_error('sire', 'Select a cock or stag as the sire.')
+
+        if dam and dam.gender not in ('Hen', 'Pullet'):
+            self.add_error('dam', 'Select a hen or pullet as the dam.')
+
+        if date_paired and date_separated and date_separated < date_paired:
+            self.add_error('date_separated', 'Separation date cannot be before the pairing date.')
+
+        return cleaned_data
 
 
 class ClutchRecordForm(forms.ModelForm):
@@ -194,3 +295,22 @@ class ClutchRecordForm(forms.ModelForm):
             'date_started': forms.DateInput(attrs={'type': 'date'}),
             'hatch_date': forms.DateInput(attrs={'type': 'date'}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        eggs = cleaned_data.get('eggs_collected') or 0
+        fertile = cleaned_data.get('fertile_eggs') or 0
+        hatched = cleaned_data.get('hatched_count') or 0
+        date_started = cleaned_data.get('date_started')
+        hatch_date = cleaned_data.get('hatch_date')
+
+        if fertile > eggs:
+            self.add_error('fertile_eggs', 'Fertile eggs cannot exceed eggs collected.')
+
+        if hatched > fertile:
+            self.add_error('hatched_count', 'Hatched chicks cannot exceed fertile eggs.')
+
+        if date_started and hatch_date and hatch_date < date_started:
+            self.add_error('hatch_date', 'Hatch date cannot be before the date started.')
+
+        return cleaned_data

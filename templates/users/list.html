@@ -215,6 +215,7 @@
                                    data-email="{{ u.email }}"
                                    data-active="{{ u.is_active|yesno:'true,false' }}"
                                    data-staff="{{ u.is_staff|yesno:'true,false' }}"
+                                   data-superuser="{{ u.is_superuser|yesno:'true,false' }}"
                                    title="Edit"
                                    aria-label="Edit {{ u.username }}">
                                     <i class="fas fa-pencil text-primary"></i>
@@ -358,6 +359,14 @@
                                 <label class="form-check-label" for="edit_is_staff">Staff</label>
                             </div>
                         </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Administrator</label>
+                            <div class="form-check form-switch mt-1">
+                                <input class="form-check-input" type="checkbox" name="is_superuser" id="edit_is_superuser">
+                                <label class="form-check-label" for="edit_is_superuser">Superuser</label>
+                            </div>
+                            <small class="form-hint">Superusers can manage all users and access the Django admin.</small>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -392,7 +401,7 @@
 <script>
 (function () {
     const SAVE_URL   = "{% url 'users:user_save_ajax' %}";
-    const DELETE_URL_BASE = "/users/ajax/delete/";
+    const DELETE_URL_BASE = "{% url 'users:user_delete_ajax' 0 %}";
 
     const editModal      = document.getElementById('editUserModal');
     const editForm        = document.getElementById('editUserForm');
@@ -447,12 +456,15 @@
             document.getElementById('edit_email').value       = btn.dataset.email;
             document.getElementById('edit_is_active').checked = btn.dataset.active === 'true';
             document.getElementById('edit_is_staff').checked  = btn.dataset.staff === 'true';
+            document.getElementById('edit_is_superuser').checked = btn.dataset.superuser === 'true';
         } else {
             modalTitle.textContent = 'Add User';
             document.getElementById('edit_id').value = '';
             passwordHint.classList.add('d-none');
             passwordInput.required = true;
             document.getElementById('edit_is_active').checked = true;
+            document.getElementById('edit_is_staff').checked = false;
+            document.getElementById('edit_is_superuser').checked = false;
         }
     });
 
@@ -467,6 +479,7 @@
         const formData = new FormData(editForm);
         formData.set('is_active', document.getElementById('edit_is_active').checked ? 'true' : 'false');
         formData.set('is_staff',  document.getElementById('edit_is_staff').checked ? 'true' : 'false');
+        formData.set('is_superuser', document.getElementById('edit_is_superuser').checked ? 'true' : 'false');
 
         fetch(SAVE_URL, {
             method: 'POST',
@@ -481,8 +494,12 @@
             return data;
         })
         .then(() => {
-            bootstrap.Modal.getInstance(editModal).hide();
-            window.refreshMainContent();
+            bootstrap.Modal.getOrCreateInstance(editModal).hide();
+            if (typeof window.refreshMainContent === 'function') {
+                window.refreshMainContent();
+            } else {
+                window.location.reload();
+            }
         })
         .catch((err) => {
             showFormError(err.message);
@@ -505,7 +522,7 @@
         const btn = this;
         btn.disabled = true;
 
-        fetch(DELETE_URL_BASE + deleteTargetId + '/', {
+        fetch(DELETE_URL_BASE.replace(/\/0\/$/, '/' + deleteTargetId + '/'), {
             method: 'POST',
             headers: { 'X-CSRFToken': csrftoken },
         })
@@ -517,7 +534,7 @@
             return data;
         })
         .then((data) => {
-            bootstrap.Modal.getInstance(document.getElementById('deleteUserModal')).hide();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteUserModal')).hide();
             const row = document.querySelector(`tr[data-row-id="${deleteTargetId}"]`);
             if (row) row.remove();
             showSuccessAlert(data.message || 'User deleted successfully.');

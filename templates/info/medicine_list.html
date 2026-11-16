@@ -64,6 +64,105 @@
     </div>
   </div>
 
+  <div class="card mb-3 dh-inline-form" id="quickMedicineCard">
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+      <div>
+        <div class="card-title mb-0">
+          <i class="fas fa-prescription-bottle-medical text-primary" aria-hidden="true"></i>
+          Add a medicine to the cabinet
+        </div>
+        <div class="text-muted small">
+          Pick a common medicine or type your own, then choose the category and unit from the lists.
+        </div>
+      </div>
+      <span class="badge bg-primary-lt text-primary ms-auto">Medicine</span>
+    </div>
+    <form id="quickMedicineForm" novalidate>
+      {% csrf_token %}
+      <div class="card-body">
+        <div class="dh-form-requirements mb-3">
+          <span class="dh-req-title">Cabinet requirements</span>
+          <ul>
+            <li><span class="text-danger">*</span> Medicine name</li>
+            <li><span class="text-danger">*</span> Category</li>
+            <li><span class="text-danger">*</span> Unit</li>
+            <li><span class="text-danger">*</span> Stock on hand</li>
+            <li>Low stock alert level</li>
+            <li>Expiration date &amp; notes</li>
+          </ul>
+        </div>
+        <div class="row g-3">
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="quick_medicine_pick">Choose from common medicines</label>
+            <select id="quick_medicine_pick" class="form-select">
+              <option value="">— Select to fill the name &amp; category —</option>
+              {% regroup medicine_suggestions by category as medicine_groups %}
+              {% for group in medicine_groups %}
+                <optgroup label="{{ group.grouper }}">
+                  {% for med in group.list %}
+                    <option value="{{ med.name }}" data-category="{{ med.category }}">{{ med.name }}</option>
+                  {% endfor %}
+                </optgroup>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label required" for="quick_medicine_name">Medicine name</label>
+            <input type="text" name="name" id="quick_medicine_name" class="form-control"
+                   maxlength="120" list="quickMedicineNameSuggestions" required
+                   placeholder="e.g. Newcastle Disease Vaccine">
+            <datalist id="quickMedicineNameSuggestions">
+              {% for med in medicine_suggestions %}
+                <option value="{{ med.name }}">{{ med.category }}</option>
+              {% endfor %}
+            </datalist>
+          </div>
+          <div class="col-sm-6 col-lg-2">
+            <label class="form-label required" for="quick_medicine_category">Category</label>
+            <select name="category" id="quick_medicine_category" class="form-select" required>
+              {% for value, label in categories %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 col-lg-2">
+            <label class="form-label required" for="quick_medicine_unit">Unit</label>
+            <select name="unit" id="quick_medicine_unit" class="form-select" required>
+              {% for unit in unit_suggestions %}
+                <option value="{{ unit }}" {% if unit == 'ml' %}selected{% endif %}>{{ unit }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 col-lg-2">
+            <label class="form-label required" for="quick_medicine_stock">Stock on hand</label>
+            <input type="number" name="stock_quantity" id="quick_medicine_stock"
+                   class="form-control" min="0" step="0.01" value="0" required>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="quick_medicine_threshold">Low stock alert at</label>
+            <input type="number" name="low_stock_threshold" id="quick_medicine_threshold"
+                   class="form-control" min="0" step="0.01" value="0">
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="quick_medicine_expiration">Expiration date</label>
+            <input type="date" name="expiration_date" id="quick_medicine_expiration" class="form-control">
+          </div>
+          <div class="col-sm-6 col-lg-6">
+            <label class="form-label" for="quick_medicine_notes">Notes</label>
+            <input type="text" name="notes" id="quick_medicine_notes" class="form-control"
+                   placeholder="Dosage, storage instructions, supplier">
+          </div>
+        </div>
+        <div id="quickMedicineError" class="alert alert-danger d-none mt-3 mb-0" role="alert"></div>
+      </div>
+      <div class="card-footer d-flex flex-wrap justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary" id="quickMedicineSubmit">
+          <i class="fas fa-plus-circle me-2"></i>Add medicine
+        </button>
+      </div>
+    </form>
+  </div>
+
   <div class="dh-toolbar">
     <form method="GET" class="dh-search-form">
       <label class="visually-hidden" for="medicineSearch">Search medicines</label>
@@ -300,44 +399,92 @@
         <h5 class="modal-title" id="medicineModalTitle">Add medicine</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form id="medicineForm">
+      <form id="medicineForm" novalidate>
         {% csrf_token %}
         <input type="hidden" name="id" id="medicine_id">
         <div class="modal-body">
           <div id="medicineFormError" class="alert alert-danger d-none"></div>
-          <div class="row g-3">
-            <div class="col-md-8">
-              <label class="form-label required">Medicine name</label>
-              <input type="text" name="name" id="medicine_name" class="form-control" maxlength="120" required>
+
+          <div class="dh-form-tabs" data-form-tabs>
+            <div class="dh-form-tab-nav" role="tablist" aria-label="Medicine steps">
+              <button type="button" class="dh-form-tab is-active" id="medicineTabDetailsBtn" data-form-tab data-tab-target="medicineTabDetails" role="tab" aria-controls="medicineTabDetails" aria-selected="true">
+                <span class="dh-form-tab-index">1</span><span class="dh-form-tab-label">Medicine details</span>
+              </button>
+              <button type="button" class="dh-form-tab" id="medicineTabStockBtn" data-form-tab data-tab-target="medicineTabStock" role="tab" aria-controls="medicineTabStock" aria-selected="false" tabindex="-1">
+                <span class="dh-form-tab-index">2</span><span class="dh-form-tab-label">Stock &amp; expiry</span>
+              </button>
+              <button type="button" class="dh-form-tab" id="medicineTabNotesBtn" data-form-tab data-tab-target="medicineTabNotes" role="tab" aria-controls="medicineTabNotes" aria-selected="false" tabindex="-1">
+                <span class="dh-form-tab-index">3</span><span class="dh-form-tab-label">Notes</span>
+              </button>
             </div>
-            <div class="col-md-4">
-              <label class="form-label required">Category</label>
-              <select name="category" id="medicine_category" class="form-select" required>
-                {% for value, label in categories %}
-                <option value="{{ value }}">{{ label }}</option>
-                {% endfor %}
-              </select>
+
+            <div class="dh-form-tab-pane is-active" id="medicineTabDetails" data-form-tab-pane role="tabpanel" aria-labelledby="medicineTabDetailsBtn" aria-hidden="false">
+              <div class="dh-form-section-title mb-3">Medicine requirements</div>
+              <div class="row g-3">
+                <div class="col-md-8">
+                  <label class="form-label required">Medicine name</label>
+                  <input type="text" name="name" id="medicine_name" class="form-control" maxlength="120" list="medicineNameSuggestions" required>
+                  <datalist id="medicineNameSuggestions">
+                    {% for med in medicine_suggestions %}
+                    <option value="{{ med.name }}">{{ med.category }}</option>
+                    {% endfor %}
+                  </datalist>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label required">Category</label>
+                  <select name="category" id="medicine_category" class="form-select" required>
+                    {% for value, label in categories %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label required">Unit</label>
+                  <input type="text" name="unit" id="medicine_unit" class="form-control" maxlength="20" value="ml" list="medicineUnitSuggestions" placeholder="ml, g, tablet..." required>
+                  <datalist id="medicineUnitSuggestions">
+                    {% for unit in unit_suggestions %}
+                    <option value="{{ unit }}"></option>
+                    {% endfor %}
+                  </datalist>
+                </div>
+              </div>
+              <div class="dh-form-tab-actions">
+                <span class="dh-form-tab-hint">Fields marked <span class="text-danger">*</span> are required.</span>
+                <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Stock &amp; expiry <i class="fas fa-arrow-right ms-1"></i></button>
+              </div>
             </div>
-            <div class="col-md-4">
-              <label class="form-label required">Unit</label>
-              <input type="text" name="unit" id="medicine_unit" class="form-control" maxlength="20" value="ml" placeholder="ml, g, tablet..." required>
+
+            <div class="dh-form-tab-pane" id="medicineTabStock" data-form-tab-pane role="tabpanel" aria-labelledby="medicineTabStockBtn" aria-hidden="true" hidden>
+              <div class="dh-form-section-title mb-3">Stock &amp; expiry tracking</div>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label required">Stock on hand</label>
+                  <input type="number" name="stock_quantity" id="medicine_stock" class="form-control" min="0" step="0.01" value="0" required>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Low stock alert at</label>
+                  <input type="number" name="low_stock_threshold" id="medicine_threshold" class="form-control" min="0" step="0.01" value="0">
+                  <small class="form-hint">Alert when stock falls to this amount.</small>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Expiration date</label>
+                  <input type="date" name="expiration_date" id="medicine_expiration" class="form-control">
+                </div>
+              </div>
+              <div class="dh-form-tab-actions">
+                <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Notes <i class="fas fa-arrow-right ms-1"></i></button>
+              </div>
             </div>
-            <div class="col-md-4">
-              <label class="form-label required">Stock on hand</label>
-              <input type="number" name="stock_quantity" id="medicine_stock" class="form-control" min="0" step="0.01" value="0" required>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Low stock alert at</label>
-              <input type="number" name="low_stock_threshold" id="medicine_threshold" class="form-control" min="0" step="0.01" value="0">
-              <small class="form-hint">Alert when stock falls to this amount.</small>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Expiration date</label>
-              <input type="date" name="expiration_date" id="medicine_expiration" class="form-control">
-            </div>
-            <div class="col-12">
+
+            <div class="dh-form-tab-pane" id="medicineTabNotes" data-form-tab-pane role="tabpanel" aria-labelledby="medicineTabNotesBtn" aria-hidden="true" hidden>
+              <div class="dh-form-section-title mb-3">Notes</div>
               <label class="form-label">Notes</label>
-              <textarea name="notes" id="medicine_notes" class="form-control" rows="2" placeholder="Dosage, storage instructions, supplier..."></textarea>
+              <textarea name="notes" id="medicine_notes" class="form-control" rows="3" placeholder="Dosage, storage instructions, supplier..."></textarea>
+              <div class="dh-form-tab-actions">
+                <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                <span class="dh-form-tab-hint ms-auto">All set — click <strong>Save medicine</strong> when ready.</span>
+              </div>
             </div>
           </div>
         </div>
@@ -428,6 +575,7 @@
 
   function resetMedicineForm() {
     medicineForm.reset();
+    if (window.DHFormTabs) window.DHFormTabs.reset(medicineForm);
     document.getElementById('medicine_id').value = '';
     document.getElementById('medicine_unit').value = 'ml';
     document.getElementById('medicine_stock').value = '0';
@@ -457,6 +605,7 @@
   medicineForm.addEventListener('submit', function (event) {
     event.preventDefault();
     clearError(medicineErrorBox);
+    if (window.DHFormTabs && !window.DHFormTabs.validate(medicineForm)) return;
 
     const submitBtn = document.getElementById('medicineSubmitBtn');
     submitBtn.disabled = true;
@@ -555,6 +704,73 @@
       })
       .finally(function () {
         button.disabled = false;
+      });
+  });
+})();
+</script>
+<script>
+(function () {
+  const form = document.getElementById('quickMedicineForm');
+  if (!form) return;
+
+  const errorBox = document.getElementById('quickMedicineError');
+  const picker = document.getElementById('quick_medicine_pick');
+  const nameInput = document.getElementById('quick_medicine_name');
+  const categorySelect = document.getElementById('quick_medicine_category');
+  const submitBtn = document.getElementById('quickMedicineSubmit');
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.classList.remove('d-none');
+  }
+
+  function clearError() {
+    errorBox.textContent = '';
+    errorBox.classList.add('d-none');
+  }
+
+  picker.addEventListener('change', function () {
+    const option = this.options[this.selectedIndex];
+    if (!option || !option.value) return;
+    nameInput.value = option.value;
+    if (option.dataset.category) {
+      categorySelect.value = option.dataset.category;
+    }
+  });
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    clearError();
+
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    submitBtn.disabled = true;
+
+    fetch("{% url 'info:medicine_save_ajax' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value },
+      body: new FormData(form),
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not save the medicine.');
+        return data;
+      })
+      .then(function () {
+        if (typeof window.refreshMainContent === 'function') {
+          window.refreshMainContent();
+        } else {
+          window.location.reload();
+        }
+      })
+      .catch(function (error) {
+        showError(error.message);
+      })
+      .finally(function () {
+        submitBtn.disabled = false;
       });
   });
 })();

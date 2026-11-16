@@ -13,7 +13,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from apps.core.scoping import scoped_flock_members
-from apps.info.models import HealthRecord, Medicine
+from apps.info.choices import COMMON_BREEDS
+from apps.info.models import Breed, HealthRecord, Medicine
 
 User = get_user_model()
 MAX_FAILED_ATTEMPTS = 5
@@ -79,7 +80,7 @@ def _validate_registration_data(data):
 
     if not username:
         errors['username'] = 'Username is required.'
-    elif User.objects.filter(username=username).exists():
+    elif User.objects.filter(username__iexact=username).exists():
         errors['username'] = 'Username already taken.'
 
     if not first_name:
@@ -96,7 +97,7 @@ def _validate_registration_data(data):
         except ValidationError:
             errors['email'] = 'Enter a valid email address.'
         else:
-            if User.objects.filter(email=email).exists():
+            if User.objects.filter(email__iexact=email).exists():
                 errors['email'] = 'Email already registered.'
 
     if not password:
@@ -178,6 +179,7 @@ def home(request):
         retired_birds=Count('id', filter=Q(status='Retired')),
         total_wins=Sum('wins'),
         total_losses=Sum('losses'),
+        total_draws=Sum('draws'),
     )
     total_birds = stats['total_birds'] or 0
     active_birds = stats['active_birds'] or 0
@@ -185,7 +187,8 @@ def home(request):
     retired_birds = stats['retired_birds'] or 0
     total_wins = stats['total_wins'] or 0
     total_losses = stats['total_losses'] or 0
-    total_fights = total_wins + total_losses
+    total_draws = stats['total_draws'] or 0
+    total_fights = total_wins + total_losses + total_draws
     win_rate = round(total_wins / total_fights * 100) if total_fights else 0
 
     def _pct(value):
@@ -231,6 +234,7 @@ def home(request):
         'breed_count': members.exclude(breed__isnull=True).values('breed').distinct().count(),
         'total_wins': total_wins,
         'total_losses': total_losses,
+        'total_draws': total_draws,
         'total_fights': total_fights,
         'win_rate': win_rate,
         'recent_members': members.select_related('breed').order_by('-created_at')[:5],
@@ -239,6 +243,8 @@ def home(request):
         'overdue_records': overdue_records,
         'overdue_count': overdue_qs.count(),
         'medicine_alert_count': medicine_alert_count,
+        'breeds': Breed.objects.all(),
+        'common_breeds': COMMON_BREEDS,
         'today': today,
     }
     return render(request, 'home.html', context)

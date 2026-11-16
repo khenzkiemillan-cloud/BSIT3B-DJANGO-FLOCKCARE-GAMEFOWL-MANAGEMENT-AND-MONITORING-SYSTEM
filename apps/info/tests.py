@@ -58,6 +58,17 @@ class DashboardTests(FlockTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse('login'), response.url)
 
+    def test_dashboard_includes_draws_in_fight_totals(self):
+        self.bird.draws = 2
+        self.bird.save(update_fields=['draws'])
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.context['total_draws'], 2)
+        self.assertEqual(response.context['total_fights'], 6)
+        self.assertEqual(response.context['win_rate'], 50)
+        self.assertContains(response, 'Draws')
+
 
 class FlockMemberPageTests(FlockTestCase):
     def test_info_list_renders_members_and_actions(self):
@@ -103,6 +114,10 @@ class FlockMemberAjaxTests(FlockTestCase):
             'losses': '0',
             'sire': 'K-001',
             'dam': '',
+            'conditioning_start_date': '2026-02-01',
+            'target_weight_grams': '2200',
+            'conditioning_program': 'Roadwork',
+            'conditioning_feed_plan': 'High-protein mix, twice daily',
         })
 
         self.assertEqual(response.status_code, 200)
@@ -110,6 +125,45 @@ class FlockMemberAjaxTests(FlockTestCase):
         self.assertEqual(member.breed, self.breed)
         self.assertEqual(member.weight_grams, 1850)
         self.assertEqual(member.wins, 2)
+        self.assertEqual(member.target_weight_grams, 2200)
+        self.assertEqual(member.conditioning_program, 'Roadwork')
+
+    def test_conditioning_status_requires_conditioning_details(self):
+        response = self.client.post(reverse('info:info_save_ajax'), {
+            'tag_number': 'K-005',
+            'gender': 'Stag',
+            'status': 'Conditioning',
+            'wins': '0',
+            'losses': '0',
+            'draws': '0',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        errors = response.json()['errors']
+        for field_name in (
+            'conditioning_start_date',
+            'target_weight_grams',
+            'conditioning_program',
+            'conditioning_feed_plan',
+        ):
+            self.assertIn(field_name, errors)
+        self.assertFalse(FlockMember.objects.filter(user=self.user, tag_number='K-005').exists())
+
+    def test_active_status_does_not_require_conditioning_details(self):
+        response = self.client.post(reverse('info:info_save_ajax'), {
+            'tag_number': 'K-006',
+            'gender': 'Hen',
+            'status': 'Active',
+            'wins': '0',
+            'losses': '0',
+            'draws': '0',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        member = FlockMember.objects.get(user=self.user, tag_number='K-006')
+        self.assertIsNone(member.conditioning_start_date)
+        self.assertIsNone(member.target_weight_grams)
+        self.assertEqual(member.conditioning_program, '')
 
     def test_duplicate_tag_number_is_rejected(self):
         response = self.client.post(reverse('info:info_save_ajax'), {
@@ -837,6 +891,115 @@ class WeightLogTests(FlockTestCase):
         self.assertEqual(self.bird.weight_grams, 1950)
 
 
+class ConditioningQuickFormTests(FlockTestCase):
+    def test_quick_form_puts_bird_in_conditioning(self):
+        response = self.client.post(reverse('info:conditioning_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'conditioning_start_date': '2026-11-15',
+            'target_weight_grams': '2150',
+            'conditioning_program': 'Roadwork',
+            'conditioning_feed_plan': 'High-protein mix, twice daily',
+            'weight_grams': '2000',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.status, 'Conditioning')
+        self.assertEqual(self.bird.conditioning_program, 'Roadwork')
+        self.assertEqual(self.bird.target_weight_grams, 2150)
+        self.assertEqual(self.bird.weight_grams, 2000)
+
+    def test_custom_program_requires_a_name(self):
+        response = self.client.post(reverse('info:conditioning_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'conditioning_start_date': '2026-11-15',
+            'target_weight_grams': '2150',
+            'conditioning_program': 'Custom',
+            'conditioning_program_custom': '',
+            'conditioning_feed_plan': 'High-protein mix, twice daily',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('conditioning_program_custom', response.json()['errors'])
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.status, 'Active')
+
+    def test_custom_program_name_is_saved(self):
+        response = self.client.post(reverse('info:conditioning_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'conditioning_start_date': '2026-11-15',
+            'target_weight_grams': '2150',
+            'conditioning_program': 'Custom',
+            'conditioning_program_custom': 'Beach roadwork',
+            'conditioning_feed_plan': 'High-protein mix, twice daily',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.conditioning_program, 'Beach roadwork')
+
+    def test_missing_bird_returns_400(self):
+        response = self.client.post(reverse('info:conditioning_save_ajax'), {
+            'conditioning_start_date': '2026-11-15',
+            'target_weight_grams': '2150',
+            'conditioning_program': 'Roadwork',
+            'conditioning_feed_plan': 'High-protein mix, twice daily',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.json())
+
+    def test_cannot_condition_another_users_bird(self):
+        other = get_user_model().objects.create_user(
+            username='other-owner', password='test-password'
+        )
+        other_bird = FlockMember.objects.create(
+            user=other,
+            tag_number='OTHER-001',
+            gender='Stag',
+            status='Active',
+        )
+
+        response = self.client.post(reverse('info:conditioning_save_ajax'), {
+            'bird_id': other_bird.pk,
+            'conditioning_start_date': '2026-11-15',
+            'target_weight_grams': '2150',
+            'conditioning_program': 'Roadwork',
+            'conditioning_feed_plan': 'High-protein mix, twice daily',
+        })
+
+        self.assertEqual(response.status_code, 404)
+        other_bird.refresh_from_db()
+        self.assertEqual(other_bird.status, 'Active')
+
+
+class InlineQuickFormRenderTests(FlockTestCase):
+    def test_flock_page_renders_quick_member_form(self):
+        response = self.client.get(reverse('info:info_list'))
+        self.assertContains(response, 'id="quickMemberForm"')
+
+    def test_conditioning_page_renders_conditioning_requirements_instead_of_quick_member_form(self):
+        response = self.client.get(reverse('info:info_list'), {'status': 'Conditioning'})
+        self.assertContains(response, 'id="quickConditioningForm"')
+        self.assertNotContains(response, 'id="quickMemberForm"')
+
+    def test_dashboard_renders_quick_member_form(self):
+        response = self.client.get(reverse('dashboard'))
+        self.assertContains(response, 'id="quickMemberForm"')
+
+    def test_breeding_page_renders_quick_pen_form(self):
+        response = self.client.get(reverse('info:breeding_list'))
+        self.assertContains(response, 'id="quickPenForm"')
+
+    def test_health_page_renders_quick_health_form(self):
+        response = self.client.get(reverse('info:health_list'))
+        self.assertContains(response, 'id="quickHealthForm"')
+
+    def test_medicine_page_renders_quick_medicine_form(self):
+        response = self.client.get(reverse('info:medicine_list'))
+        self.assertContains(response, 'id="quickMedicineForm"')
+
+
 class BreedingModuleTests(FlockTestCase):
     def test_breeding_pen_and_clutch_workflow(self):
         hen = FlockMember.objects.create(
@@ -920,4 +1083,287 @@ class FlockBatchActionTests(FlockTestCase):
         bird2.refresh_from_db()
         self.assertEqual(self.bird.status, 'Conditioning')
         self.assertEqual(bird2.status, 'Conditioning')
+
+
+class BreedingPenValidationTests(FlockTestCase):
+    def test_cannot_pair_another_users_bird(self):
+        from .models import BreedingPen
+
+        other_user = get_user_model().objects.create_user(
+            username='other-pen-owner',
+            password='test-password',
+        )
+        other_hen = FlockMember.objects.create(
+            user=other_user,
+            tag_number='X-HEN-001',
+            gender='Hen',
+            status='Broodhen',
+        )
+
+        response = self.client.post(reverse('info:breeding_pen_save_ajax'), {
+            'pen_number': 'Pen-X',
+            'sire': self.bird.pk,
+            'dam': other_hen.pk,
+            'date_paired': timezone.localdate(),
+            'status': 'active',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(BreedingPen.objects.filter(pen_number='Pen-X').exists())
+
+    def test_rejects_same_bird_as_sire_and_dam(self):
+        response = self.client.post(reverse('info:breeding_pen_save_ajax'), {
+            'pen_number': 'Pen-Same',
+            'sire': self.bird.pk,
+            'dam': self.bird.pk,
+            'date_paired': timezone.localdate(),
+            'status': 'active',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('different birds', response.json()['error'].lower())
+
+    def test_rejects_reversed_parent_genders(self):
+        hen = FlockMember.objects.create(
+            user=self.user,
+            tag_number='HEN-GENDER',
+            gender='Hen',
+            status='Broodhen',
+        )
+
+        response = self.client.post(reverse('info:breeding_pen_save_ajax'), {
+            'pen_number': 'Pen-Gender',
+            'sire': hen.pk,
+            'dam': self.bird.pk,
+            'date_paired': timezone.localdate(),
+            'status': 'active',
+        })
+
+        self.assertEqual(response.status_code, 400)
+
+
+class ClutchRecordValidationTests(FlockTestCase):
+    def setUp(self):
+        super().setUp()
+        from .models import BreedingPen
+
+        self.hen = FlockMember.objects.create(
+            user=self.user,
+            tag_number='CLUTCH-HEN',
+            gender='Hen',
+            status='Broodhen',
+        )
+        self.pen = BreedingPen.objects.create(
+            user=self.user,
+            pen_number='Pen-Clutch',
+            sire=self.bird,
+            dam=self.hen,
+            date_paired=timezone.localdate(),
+            status='active',
+        )
+
+    def test_rejects_more_fertile_than_collected(self):
+        response = self.client.post(reverse('info:clutch_save_ajax'), {
+            'pen_id': self.pen.pk,
+            'clutch_number': '1',
+            'date_started': timezone.localdate(),
+            'eggs_collected': 5,
+            'fertile_eggs': 6,
+            'hatched_count': 0,
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.pen.clutches.count(), 0)
+
+    def test_rejects_hatch_date_before_start_date(self):
+        response = self.client.post(reverse('info:clutch_save_ajax'), {
+            'pen_id': self.pen.pk,
+            'clutch_number': '2',
+            'date_started': timezone.localdate(),
+            'eggs_collected': 10,
+            'fertile_eggs': 8,
+            'hatched_count': 6,
+            'hatch_date': timezone.localdate() - timedelta(days=2),
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.pen.clutches.count(), 0)
+
+
+class WeightLogResyncTests(FlockTestCase):
+    def test_deleting_latest_log_restores_previous_weight(self):
+        from .models import WeightLog
+
+        WeightLog.objects.create(
+            bird=self.bird,
+            date=timezone.localdate() - timedelta(days=2),
+            time_of_day='morning',
+            weight_grams=1800,
+        )
+        newer_log = WeightLog.objects.create(
+            bird=self.bird,
+            date=timezone.localdate(),
+            time_of_day='evening',
+            weight_grams=2000,
+        )
+        self.bird.weight_grams = 2000
+        self.bird.save(update_fields=['weight_grams'])
+
+        response = self.client.post(
+            reverse('info:weight_log_delete_ajax', args=[newer_log.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['weight_grams'], 1800)
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.weight_grams, 1800)
+
+    def test_backdated_log_does_not_override_newest_weight(self):
+        from .models import WeightLog
+
+        WeightLog.objects.create(
+            bird=self.bird,
+            date=timezone.localdate(),
+            time_of_day='morning',
+            weight_grams=2100,
+        )
+
+        response = self.client.post(reverse('info:weight_log_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'date': timezone.localdate() - timedelta(days=5),
+            'time_of_day': 'morning',
+            'weight_grams': 1500,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['weight_grams'], 2100)
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.weight_grams, 2100)
+
+
+class MedicineRestockValidationTests(FlockTestCase):
+    def setUp(self):
+        super().setUp()
+        self.medicine = Medicine.objects.create(
+            user=self.user,
+            name='Nan guard medicine',
+            category='Other',
+            unit='ml',
+            stock_quantity=Decimal('5.00'),
+        )
+
+    def test_rejects_non_finite_restock_amounts(self):
+        for amount in ('NaN', 'Infinity', '-Infinity'):
+            with self.subTest(amount=amount):
+                response = self.client.post(
+                    reverse('info:medicine_restock_ajax'),
+                    {'id': self.medicine.pk, 'amount': amount},
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.medicine.refresh_from_db()
+                self.assertEqual(self.medicine.stock_quantity, Decimal('5.00'))
+
+
+class FightRecordReassignmentTests(FlockTestCase):
+    def test_reassignment_updates_both_birds_counters(self):
+        from .models import FightRecord
+
+        other_bird = FlockMember.objects.create(
+            user=self.user,
+            tag_number='K-002',
+            gender='Cock',
+            status='Active',
+        )
+        response = self.client.post(reverse('info:fight_record_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'event_name': 'Reassignment Derby',
+            'fight_date': timezone.localdate(),
+            'result': 'win',
+        })
+        self.assertEqual(response.status_code, 200)
+        record_id = response.json()['id']
+
+        response = self.client.post(reverse('info:fight_record_save_ajax'), {
+            'record_id': record_id,
+            'bird_id': other_bird.pk,
+            'event_name': 'Reassignment Derby',
+            'fight_date': timezone.localdate(),
+            'result': 'win',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        record = FightRecord.objects.get(pk=record_id)
+        self.assertEqual(record.bird, other_bird)
+        self.bird.refresh_from_db()
+        other_bird.refresh_from_db()
+        self.assertEqual(self.bird.wins, 0)
+        self.assertEqual(other_bird.wins, 1)
+
+
+class FlockCSVImportCaseTests(FlockTestCase):
+    def test_csv_import_updates_existing_tag_case_insensitively(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        csv_content = (
+            "Tag Number,Breed,Gender,Status,Color\n"
+            "k-001,kelso,Cock,Active,Blue\n"
+        ).encode('utf-8')
+        csv_file = SimpleUploadedFile(
+            'flock.csv', csv_content, content_type='text/csv'
+        )
+
+        response = self.client.post(
+            reverse('info:import_flock_csv'), {'csv_file': csv_file}
+        )
+
+        self.assertEqual(response.status_code, 302)
+        matches = FlockMember.objects.filter(
+            user=self.user, tag_number__iexact='k-001'
+        )
+        self.assertEqual(matches.count(), 1)
+        updated = matches.get()
+        self.assertEqual(updated.pk, self.bird.pk)
+        self.assertEqual(updated.color, 'Blue')
+        self.assertEqual(updated.breed, self.breed)
+
+    def test_csv_import_result_is_shown_to_user(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        csv_content = (
+            "Tag Number,Breed,Gender,Status\n"
+            "MSG-001,Kelso,Cock,Active\n"
+        ).encode('utf-8')
+        csv_file = SimpleUploadedFile(
+            'flock.csv', csv_content, content_type='text/csv'
+        )
+
+        response = self.client.post(
+            reverse('info:import_flock_csv'), {'csv_file': csv_file}, follow=True
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'CSV Import complete')
+        self.assertContains(response, 'alert-success')
+
+    def test_csv_import_error_is_shown_as_danger(self):
+        response = self.client.post(
+            reverse('info:import_flock_csv'), {}, follow=True
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Please select a CSV file to upload.')
+        self.assertContains(response, 'alert-danger')
+
+
+class FlockBatchHealthValidationTests(FlockTestCase):
+    def test_batch_health_rejects_invalid_payload(self):
+        response = self.client.post(reverse('info:batch_action_ajax'), {
+            'action': 'batch_health',
+            'ids[]': [self.bird.pk],
+            'title': 'Missing required fields',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.bird.health_records.count(), 0)
 

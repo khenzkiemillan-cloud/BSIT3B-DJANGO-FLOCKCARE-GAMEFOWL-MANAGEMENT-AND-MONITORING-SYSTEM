@@ -5,15 +5,17 @@ services:
     build: .
     command: >
       sh -c "python manage.py migrate &&
-             python manage.py runserver 0.0.0.0:8000"
+             python manage.py collectstatic --noinput &&
+             gunicorn --bind 0.0.0.0:8000 --workers 3 mysite.wsgi:application"
     volumes:
       - .:/app
       - media_volume:/app/media
     ports:
       - "8000:8000"
     environment:
-      - DEBUG=True
+      - DEBUG=False
       - SECRET_KEY=flockcare-insecure-dev-key-change-in-production
+      - ALLOWED_HOSTS=*
       - USE_MYSQL=True
       - DB_NAME=flockcare
       - DB_USER=flockcare_user

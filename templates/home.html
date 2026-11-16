@@ -33,6 +33,8 @@
     </div>
   </div>
 
+  {% include "info/partials/quick_member_form.html" %}
+
   {% if medicine_alert_count %}
   <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2" role="alert">
     <i class="fas fa-prescription-bottle-medical" aria-hidden="true"></i>
@@ -109,7 +111,7 @@
               <div class="tracking-wide text-white-50">Win rate</div>
               <div class="dh-stat-meta">
                 <i class="fas fa-trophy"></i>
-                {{ total_wins }}W – {{ total_losses }}L
+                {{ total_wins }}W – {{ total_losses }}L{% if total_draws %} – {{ total_draws }}D{% endif %}
               </div>
             </div>
             <span class="stat-card-icon"><i class="fas fa-trophy"></i></span>
@@ -307,6 +309,10 @@
               <div class="dh-record-row">
                 <span class="text-muted">Losses</span>
                 <span class="fw-semibold text-danger">{{ total_losses }}</span>
+              </div>
+              <div class="dh-record-row">
+                <span class="text-muted">Draws</span>
+                <span class="fw-semibold text-warning">{{ total_draws }}</span>
               </div>
               <div class="dh-record-row">
                 <span class="text-muted">Win rate</span>

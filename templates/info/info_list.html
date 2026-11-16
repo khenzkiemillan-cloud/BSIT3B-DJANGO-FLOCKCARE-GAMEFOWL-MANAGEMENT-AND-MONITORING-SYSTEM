@@ -27,6 +27,7 @@
           <a href="{% url 'info:export_flock_csv' %}" class="btn btn-outline-secondary">
             <i class="fas fa-file-csv me-2"></i>Export CSV
           </a>
+          {% if status != 'Conditioning' %}
           <button type="button"
                   class="btn btn-primary"
                   data-bs-toggle="modal"
@@ -34,6 +35,7 @@
                   data-mode="create">
             <i class="fas fa-plus-circle me-2"></i>Add flock member
           </button>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -69,6 +71,94 @@
       </div>
     </div>
   </div>
+
+  {% if status == 'Conditioning' %}
+  <div class="card mb-3 dh-inline-form" id="quickConditioningCard">
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+      <div>
+        <div class="card-title mb-0">
+          <i class="fas fa-dumbbell text-warning" aria-hidden="true"></i>
+          Conditioning requirements
+        </div>
+        <div class="text-muted small">
+          Pick a bird, then choose a program and fill in its target weight and feed plan.
+        </div>
+      </div>
+      <span class="badge bg-warning-lt text-warning ms-auto">Conditioning</span>
+    </div>
+    <form id="quickConditioningForm" novalidate>
+      {% csrf_token %}
+      <div class="card-body">
+        <div class="dh-form-requirements mb-3">
+          <span class="dh-req-title">Conditioning requirements</span>
+          <ul>
+            <li><span class="text-danger">*</span> Bird</li>
+            <li><span class="text-danger">*</span> Start date</li>
+            <li><span class="text-danger">*</span> Target / fight weight</li>
+            <li><span class="text-danger">*</span> Conditioning program</li>
+            <li><span class="text-danger">*</span> Feed / diet plan</li>
+            <li>Current weight (optional)</li>
+          </ul>
+        </div>
+        <div class="row g-3">
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label required" for="quick_cond_bird">Bird</label>
+            <select name="bird_id" id="quick_cond_bird" class="form-select" required>
+              <option value="">— Select bird —</option>
+              {% for bird in farm_birds %}
+                <option value="{{ bird.id }}">
+                  {{ bird.tag_number }} — {{ bird.gender }} • {{ bird.status }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label required" for="quick_cond_start">Conditioning start date</label>
+            <input type="date" name="conditioning_start_date" id="quick_cond_start"
+                   class="form-control" value="{% now 'Y-m-d' %}" required>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label required" for="quick_cond_target">Target / fight weight (g)</label>
+            <input type="number" name="target_weight_grams" id="quick_cond_target"
+                   class="form-control" min="1" step="1" placeholder="e.g. 2200" required>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label required" for="quick_cond_program">Conditioning program</label>
+            <select name="conditioning_program" id="quick_cond_program" class="form-select" required>
+              {% for program in conditioning_programs %}
+                <option value="{{ program }}">{{ program }}</option>
+              {% endfor %}
+              <option value="Custom">Custom / other program</option>
+            </select>
+          </div>
+          <div class="col-sm-6 col-lg-3 d-none" id="quickCondCustomWrap">
+            <label class="form-label required" for="quick_cond_custom">Custom program name</label>
+            <input type="text" name="conditioning_program_custom" id="quick_cond_custom"
+                   class="form-control" maxlength="100" placeholder="e.g. Beach roadwork">
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label required" for="quick_cond_feed">Feed / diet plan</label>
+            <input type="text" name="conditioning_feed_plan" id="quick_cond_feed"
+                   class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily" required>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="quick_cond_weight">Current weight (g)</label>
+            <input type="number" name="weight_grams" id="quick_cond_weight"
+                   class="form-control" min="0" step="1" placeholder="Optional">
+          </div>
+        </div>
+        <div id="quickConditioningError" class="alert alert-danger d-none mt-3 mb-0" role="alert"></div>
+      </div>
+      <div class="card-footer d-flex flex-wrap justify-content-end gap-2">
+        <button type="submit" class="btn btn-warning" id="quickConditioningSubmit">
+          <i class="fas fa-dumbbell me-2"></i>Start conditioning
+        </button>
+      </div>
+    </form>
+  </div>
+  {% else %}
+  {% include "info/partials/quick_member_form.html" with show_full_form=True %}
+  {% endif %}
 
   <div class="dh-toolbar">
     <form method="GET" class="dh-search-form">
@@ -232,6 +322,10 @@
                         data-wins="{{ bird.wins }}"
                         data-losses="{{ bird.losses }}"
                         data-draws="{{ bird.draws }}"
+                        data-conditioning-start="{{ bird.conditioning_start_date|date:'Y-m-d' }}"
+                        data-target-weight="{{ bird.target_weight_grams|default:'' }}"
+                        data-conditioning-program="{{ bird.conditioning_program|default:'' }}"
+                        data-conditioning-feed="{{ bird.conditioning_feed_plan|default:'' }}"
                         data-sire="{{ bird.sire|default:'' }}"
                         data-dam="{{ bird.dam|default:'' }}"
                         title="Edit"
@@ -256,6 +350,10 @@
                         data-id="{{ bird.id }}"
                         data-tag-number="{{ bird.tag_number }}"
                         data-weights-url="{% url 'info:weight_logs_ajax' bird.id %}"
+                        data-conditioning-start="{{ bird.conditioning_start_date|date:'M j, Y' }}"
+                        data-target-weight="{{ bird.target_weight_grams|default:'' }}"
+                        data-conditioning-program="{{ bird.conditioning_program|default:'' }}"
+                        data-conditioning-feed="{{ bird.conditioning_feed_plan|default:'' }}"
                         title="Weight / Conditioning logs"
                         aria-label="Weight logs for {{ bird.tag_number }}">
                   <i class="fas fa-scale-balanced text-secondary"></i>
@@ -378,133 +476,220 @@
         <h5 class="modal-title" id="memberModalTitle">Add flock member</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form id="memberForm" enctype="multipart/form-data">
+      <form id="memberForm" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
         <input type="hidden" name="id" id="member_id">
         <div class="modal-body">
           <div id="memberFormError" class="alert alert-danger d-none"></div>
-          <div class="row g-3">
-            <div class="col-12">
-              <div class="dh-form-section-title">Bird identity</div>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label required">Tag / Band number</label>
-              <input type="text" name="tag_number" id="member_tag_number" class="form-control" maxlength="50" required>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Cage / Pen / Cord #</label>
-              <input type="text" name="cage_number" id="member_cage_number" class="form-control" maxlength="50" placeholder="e.g. Cord 12 or Pen B-4">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Breed / Bloodline</label>
-              <select name="breed" id="member_breed" class="form-select">
-                <option value="">— Select breed —</option>
-                {% for breed in breeds %}
-                <option value="{{ breed.id }}">{{ breed.name }}</option>
-                {% endfor %}
-              </select>
-              {% if not breeds %}
-              <small class="form-hint">No breeds yet — you can create one below.</small>
-              {% endif %}
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Add a new breed</label>
-              <input type="text" name="new_breed" id="member_new_breed" class="form-control" maxlength="100" placeholder="e.g. Sweater">
-              <small class="form-hint">Optional. If filled, this breed is created and used instead of the selection.</small>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label required">Gender</label>
-              <select name="gender" id="member_gender" class="form-select" required>
-                <option value="">Select gender</option>
-                <option value="Stag">Stag</option>
-                <option value="Cock">Cock</option>
-                <option value="Pullet">Pullet</option>
-                <option value="Hen">Hen</option>
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label required">Status</label>
-              <select name="status" id="member_status" class="form-select" required>
-                <option value="Active">Active</option>
-                <option value="Conditioning">Conditioning</option>
-                <option value="Broodcock">Broodcock</option>
-                <option value="Broodhen">Broodhen</option>
-                <option value="Retired">Retired</option>
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Hatch date</label>
-              <input type="date" name="birth_date" id="member_birth_date" class="form-control">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Weight (grams)</label>
-              <input type="number" name="weight_grams" id="member_weight" class="form-control" min="0" step="1">
+
+          <div class="dh-form-tabs" data-form-tabs>
+            <div class="dh-form-tab-nav" role="tablist" aria-label="Add flock member steps">
+              <button type="button" class="dh-form-tab is-active" id="memberTabFlockBtn" data-form-tab data-tab-target="memberTabFlock" role="tab" aria-controls="memberTabFlock" aria-selected="true">
+                <span class="dh-form-tab-index">1</span><span class="dh-form-tab-label">Flock</span>
+              </button>
+              <button type="button" class="dh-form-tab" id="memberTabBreedingBtn" data-form-tab data-tab-target="memberTabBreeding" role="tab" aria-controls="memberTabBreeding" aria-selected="false" tabindex="-1">
+                <span class="dh-form-tab-index">2</span><span class="dh-form-tab-label">Breeding</span>
+              </button>
+              <button type="button" class="dh-form-tab" id="memberTabConditioningBtn" data-form-tab data-tab-target="memberTabConditioning" role="tab" aria-controls="memberTabConditioning" aria-selected="false" tabindex="-1">
+                <span class="dh-form-tab-index">3</span><span class="dh-form-tab-label">Conditioning</span>
+              </button>
+              <button type="button" class="dh-form-tab" id="memberTabConformationBtn" data-form-tab data-tab-target="memberTabConformation" role="tab" aria-controls="memberTabConformation" aria-selected="false" tabindex="-1">
+                <span class="dh-form-tab-index">4</span><span class="dh-form-tab-label">Conformation &amp; photo</span>
+              </button>
             </div>
 
-            <div class="col-12">
-              <div class="dh-form-section-title mt-2">Physical conformation &amp; Photo</div>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Comb type</label>
-              <select name="comb_type" id="member_comb_type" class="form-select">
-                <option value="Pea">Pea Comb</option>
-                <option value="Straight">Straight / Single</option>
-                <option value="Strawberry">Strawberry</option>
-                <option value="Walnut">Walnut</option>
-                <option value="Cushion">Cushion</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Leg / Scale color</label>
-              <select name="leg_color" id="member_leg_color" class="form-select">
-                <option value="Yellow">Yellow</option>
-                <option value="Green">Green</option>
-                <option value="White">White</option>
-                <option value="Blue/Slate">Blue / Slate</option>
-                <option value="Lead">Lead / Dark</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Color / Plumage</label>
-              <input type="text" name="color" id="member_color" class="form-control" placeholder="e.g. Red, Grey, Dom">
-            </div>
-            <div class="col-12">
-              <label class="form-label">Photo upload</label>
-              <input type="file" name="image" id="member_image" class="form-control" accept="image/*">
-              <small class="form-hint">Upload bird picture (PNG, JPG, WebP up to 5 MB).</small>
-            </div>
+            <div class="dh-form-tab-body">
+              <div class="dh-form-tab-pane is-active" id="memberTabFlock" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabFlockBtn" aria-hidden="false">
+                <div class="dh-form-section-title mb-3">Flock requirements</div>
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label required">Tag / Band number</label>
+                    <input type="text" name="tag_number" id="member_tag_number" class="form-control" maxlength="50" required>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Cage / Pen / Cord #</label>
+                    <input type="text" name="cage_number" id="member_cage_number" class="form-control" maxlength="50" placeholder="e.g. Cord 12 or Pen B-4">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Breed / Bloodline</label>
+                    <select name="breed" id="member_breed" class="form-select">
+                      <option value="">— Select breed —</option>
+                      {% for breed in breeds %}
+                      <option value="{{ breed.id }}">{{ breed.name }}</option>
+                      {% endfor %}
+                    </select>
+                    {% if not breeds %}
+                    <small class="form-hint">No breeds yet — you can create one on the right.</small>
+                    {% endif %}
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Add a new breed</label>
+                    <input type="text" name="new_breed" id="member_new_breed" class="form-control" maxlength="100" list="breedSuggestions" placeholder="e.g. Sweater">
+                    <small class="form-hint">Optional. If filled, this breed is created and used instead of the selection.</small>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label required">Gender</label>
+                    <select name="gender" id="member_gender" class="form-select" required>
+                      <option value="">Select gender</option>
+                      <option value="Stag">Stag</option>
+                      <option value="Cock">Cock</option>
+                      <option value="Pullet">Pullet</option>
+                      <option value="Hen">Hen</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label required">Status</label>
+                    <select name="status" id="member_status" class="form-select" required>
+                      <option value="Active">Active</option>
+                      <option value="Conditioning">Conditioning</option>
+                      <option value="Broodcock">Broodcock</option>
+                      <option value="Broodhen">Broodhen</option>
+                      <option value="Retired">Retired</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Hatch date</label>
+                    <input type="date" name="birth_date" id="member_birth_date" class="form-control">
+                  </div>
+                </div>
+                <div class="dh-form-tab-actions">
+                  <span class="dh-form-tab-hint">Fields marked <span class="text-danger">*</span> are required.</span>
+                  <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Breeding <i class="fas fa-arrow-right ms-1"></i></button>
+                </div>
+              </div>
 
-            <div class="col-12">
-              <div class="dh-form-section-title mt-2">Fight Record</div>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Wins</label>
-              <input type="number" name="wins" id="member_wins" class="form-control" min="0" value="0">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Losses</label>
-              <input type="number" name="losses" id="member_losses" class="form-control" min="0" value="0">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Draws (Tinabla)</label>
-              <input type="number" name="draws" id="member_draws" class="form-control" min="0" value="0">
-            </div>
+              <div class="dh-form-tab-pane" id="memberTabBreeding" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabBreedingBtn" aria-hidden="true" hidden>
+                <div class="dh-form-section-title mb-3">Breeding requirements (optional)</div>
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Sire (tag / bloodline)</label>
+                    <input type="text" name="sire" id="member_sire" class="form-control" maxlength="50" list="birdTagSuggestions" placeholder="e.g. K-101 or Pure Kelso">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Dam (tag / bloodline)</label>
+                    <input type="text" name="dam" id="member_dam" class="form-control" maxlength="50" list="birdTagSuggestions" placeholder="e.g. H-204 or Sweeter Hen">
+                  </div>
+                  <div class="col-12">
+                    <div class="alert alert-info py-2 small mb-0">
+                      <i class="fas fa-circle-info me-1"></i>
+                      Add parent tags or bloodlines here so the pedigree and breeding reports stay complete.
+                    </div>
+                  </div>
+                </div>
+                <div class="dh-form-tab-actions">
+                  <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                  <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Conditioning <i class="fas fa-arrow-right ms-1"></i></button>
+                </div>
+              </div>
 
-            <div class="col-12">
-              <div class="dh-form-section-title mt-2">Lineage</div>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Sire (tag / bloodline)</label>
-              <input type="text" name="sire" id="member_sire" class="form-control" maxlength="50" placeholder="e.g. K-101 or Pure Kelso">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Dam (tag / bloodline)</label>
-              <input type="text" name="dam" id="member_dam" class="form-control" maxlength="50" placeholder="e.g. H-204 or Sweeter Hen">
+              <div class="dh-form-tab-pane" id="memberTabConditioning" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabConditioningBtn" aria-hidden="true" hidden>
+                <div class="dh-form-section-title mb-1">Conditioning requirements</div>
+                <p class="text-secondary small mb-3">These fields are required when the bird's status is set to <strong>Conditioning</strong>.</p>
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label" data-conditioning-label>Conditioning start date</label>
+                    <input type="date" name="conditioning_start_date" id="member_conditioning_start_date" class="form-control">
+                    <small class="form-hint">When the bird entered conditioning.</small>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" data-conditioning-label>Target / fight weight (grams)</label>
+                    <input type="number" name="target_weight_grams" id="member_target_weight" class="form-control" min="1" step="1" placeholder="e.g. 2200">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" data-conditioning-label>Conditioning program</label>
+                    <input type="text" name="conditioning_program" id="member_conditioning_program" class="form-control" maxlength="100" list="conditioningProgramSuggestions" placeholder="e.g. Roadwork, Sparring">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" data-conditioning-label>Feed / diet plan</label>
+                    <input type="text" name="conditioning_feed_plan" id="member_conditioning_feed_plan" class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Current weight (grams)</label>
+                    <input type="number" name="weight_grams" id="member_weight" class="form-control" min="0" step="1">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Wins</label>
+                    <input type="number" name="wins" id="member_wins" class="form-control" min="0" value="0">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Losses</label>
+                    <input type="number" name="losses" id="member_losses" class="form-control" min="0" value="0">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Draws (Tinabla)</label>
+                    <input type="number" name="draws" id="member_draws" class="form-control" min="0" value="0">
+                  </div>
+                  <div class="col-12">
+                    <div class="alert alert-info py-2 small mb-0">
+                      <i class="fas fa-circle-info me-1"></i>
+                      Use the <strong>scale</strong> and <strong>trophy</strong> icons in the flock table to log daily weights and sanctioned fights. Health and medicine records are logged from their own pages.
+                    </div>
+                  </div>
+                </div>
+                <div class="dh-form-tab-actions">
+                  <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                  <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Conformation <i class="fas fa-arrow-right ms-1"></i></button>
+                </div>
+              </div>
+
+              <div class="dh-form-tab-pane" id="memberTabConformation" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabConformationBtn" aria-hidden="true" hidden>
+                <div class="dh-form-section-title mb-3">Physical conformation &amp; photo</div>
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label">Comb type</label>
+                    <select name="comb_type" id="member_comb_type" class="form-select">
+                      <option value="Pea">Pea Comb</option>
+                      <option value="Straight">Straight / Single</option>
+                      <option value="Strawberry">Strawberry</option>
+                      <option value="Walnut">Walnut</option>
+                      <option value="Cushion">Cushion</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Leg / Scale color</label>
+                    <select name="leg_color" id="member_leg_color" class="form-select">
+                      <option value="Yellow">Yellow</option>
+                      <option value="Green">Green</option>
+                      <option value="White">White</option>
+                      <option value="Blue/Slate">Blue / Slate</option>
+                      <option value="Lead">Lead / Dark</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Color / Plumage</label>
+                    <input type="text" name="color" id="member_color" class="form-control" placeholder="e.g. Red, Grey, Dom">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">Photo upload</label>
+                    <input type="file" name="image" id="member_image" class="form-control" accept="image/*">
+                    <small class="form-hint">Upload bird picture (PNG, JPG, WebP up to 5 MB).</small>
+                  </div>
+                </div>
+                <div class="dh-form-tab-actions">
+                  <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                  <span class="dh-form-tab-hint ms-auto">All set — click <strong>Save flock member</strong> when ready.</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+        <datalist id="birdTagSuggestions">
+          {% for tag in bird_tags %}
+          <option value="{{ tag }}"></option>
+          {% endfor %}
+        </datalist>
+        <datalist id="breedSuggestions">
+          {% for breed_name in common_breeds %}
+          <option value="{{ breed_name }}"></option>
+          {% endfor %}
+        </datalist>
+        <datalist id="conditioningProgramSuggestions">
+          {% for program in conditioning_programs %}
+          <option value="{{ program }}"></option>
+          {% endfor %}
+        </datalist>
         <div class="modal-footer">
           <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn btn-primary" id="memberSubmitBtn">Save flock member</button>
@@ -555,35 +740,95 @@
         </div>
 
         <h6 class="dh-form-section-title mb-3" id="healthFormTitle">Add health record</h6>
-        <form id="healthForm">
+        <form id="healthForm" novalidate>
           {% csrf_token %}
           <input type="hidden" name="bird_id" id="health_bird_id">
           <input type="hidden" name="record_id" id="health_record_id">
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label required">Record type</label>
-              <select name="record_type" id="health_record_type" class="form-select" required>
-                <option value="Vaccination">Vaccination</option>
-                <option value="Deworming">Deworming</option>
-                <option value="Vitamin">Vitamin / supplement</option>
-                <option value="Treatment">Injury / illness treatment</option>
-              </select>
+          <div class="dh-form-tabs" data-form-tabs>
+            <div class="dh-form-tab-nav" role="tablist" aria-label="Health record steps">
+              <button type="button" class="dh-form-tab is-active" id="birdHealthTabDetailsBtn" data-form-tab data-tab-target="birdHealthTabDetails" role="tab" aria-controls="birdHealthTabDetails" aria-selected="true">
+                <span class="dh-form-tab-index">1</span><span class="dh-form-tab-label">Record details</span>
+              </button>
+              <button type="button" class="dh-form-tab" id="birdHealthTabScheduleBtn" data-form-tab data-tab-target="birdHealthTabSchedule" role="tab" aria-controls="birdHealthTabSchedule" aria-selected="false" tabindex="-1">
+                <span class="dh-form-tab-index">2</span><span class="dh-form-tab-label">Schedule</span>
+              </button>
+              <button type="button" class="dh-form-tab" id="birdHealthTabNotesBtn" data-form-tab data-tab-target="birdHealthTabNotes" role="tab" aria-controls="birdHealthTabNotes" aria-selected="false" tabindex="-1">
+                <span class="dh-form-tab-index">3</span><span class="dh-form-tab-label">Notes</span>
+              </button>
             </div>
-            <div class="col-md-6">
-              <label class="form-label required">Title</label>
-              <input type="text" name="title" id="health_title" class="form-control" maxlength="100" required>
+
+            <div class="dh-form-tab-pane is-active" id="birdHealthTabDetails" data-form-tab-pane role="tabpanel" aria-labelledby="birdHealthTabDetailsBtn" aria-hidden="false">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label required">Record type</label>
+                  <select name="record_type" id="health_record_type" class="form-select" required>
+                    <option value="Vaccination">Vaccination</option>
+                    <option value="Deworming">Deworming</option>
+                    <option value="Vitamin">Vitamin / supplement</option>
+                    <option value="Treatment">Injury / illness treatment</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Medicine / treatment used</label>
+                  <select id="bird_medicine_picker" class="form-select">
+                    <option value="">— Select from cabinet or common list —</option>
+                    <optgroup label="My medicine cabinet">
+                      {% for med in medicine_options %}
+                      {% if med.in_cabinet %}
+                      <option value="{{ med.name }}" data-record-type="{{ med.record_type }}">{{ med.name }} — {{ med.category }}</option>
+                      {% endif %}
+                      {% endfor %}
+                    </optgroup>
+                    <optgroup label="Common vaccines &amp; treatments">
+                      {% for med in medicine_options %}
+                      {% if not med.in_cabinet %}
+                      <option value="{{ med.name }}" data-record-type="{{ med.record_type }}">{{ med.name }} — {{ med.category }}</option>
+                      {% endif %}
+                      {% endfor %}
+                    </optgroup>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label required">Title</label>
+                  <input type="text" name="title" id="health_title" class="form-control" maxlength="100" list="birdHealthTitleSuggestions" required>
+                  <datalist id="birdHealthTitleSuggestions">
+                    {% for med in medicine_options %}
+                    <option value="{{ med.name }}"></option>
+                    {% endfor %}
+                  </datalist>
+                </div>
+              </div>
+              <div class="dh-form-tab-actions">
+                <span class="dh-form-tab-hint">Fields marked <span class="text-danger">*</span> are required.</span>
+                <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Schedule <i class="fas fa-arrow-right ms-1"></i></button>
+              </div>
             </div>
-            <div class="col-md-6">
-              <label class="form-label required">Date administered</label>
-              <input type="date" name="date_administered" id="health_date_administered" class="form-control" required>
+
+            <div class="dh-form-tab-pane" id="birdHealthTabSchedule" data-form-tab-pane role="tabpanel" aria-labelledby="birdHealthTabScheduleBtn" aria-hidden="true" hidden>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label required">Date administered</label>
+                  <input type="date" name="date_administered" id="health_date_administered" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Next due date</label>
+                  <input type="date" name="next_due_date" id="health_next_due_date" class="form-control">
+                  <small class="form-hint">Leave blank if no follow-up is needed.</small>
+                </div>
+              </div>
+              <div class="dh-form-tab-actions">
+                <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Notes <i class="fas fa-arrow-right ms-1"></i></button>
+              </div>
             </div>
-            <div class="col-md-6">
-              <label class="form-label">Next due date</label>
-              <input type="date" name="next_due_date" id="health_next_due_date" class="form-control">
-            </div>
-            <div class="col-12">
+
+            <div class="dh-form-tab-pane" id="birdHealthTabNotes" data-form-tab-pane role="tabpanel" aria-labelledby="birdHealthTabNotesBtn" aria-hidden="true" hidden>
               <label class="form-label">Notes</label>
-              <textarea name="notes" id="health_notes" class="form-control" rows="2"></textarea>
+              <textarea name="notes" id="health_notes" class="form-control" rows="2" placeholder="Dosage, reaction, or other observations..."></textarea>
+              <div class="dh-form-tab-actions">
+                <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                <span class="dh-form-tab-hint ms-auto">All set — click <strong>Add health record</strong> when ready.</span>
+              </div>
             </div>
           </div>
         </form>
@@ -800,39 +1045,82 @@
       <div class="modal-body">
         <div id="weightError" class="alert alert-danger d-none"></div>
 
-        <div id="weightLogsList" class="list-group list-group-flush mb-4" style="max-height: 220px; overflow-y: auto;">
-          <div class="list-group-item text-muted">Loading weight entries…</div>
-        </div>
-
-        <div class="dh-form-section-title mb-2">Log Daily Weight</div>
-        <form id="weightForm">
-          {% csrf_token %}
-          <input type="hidden" name="bird_id" id="weight_bird_id">
-          <div class="row g-2">
+        <div id="weightPlanSummary" class="border rounded p-3 mb-3 d-none">
+          <div class="fw-semibold mb-2"><i class="fas fa-dumbbell me-1 text-warning"></i>Conditioning plan</div>
+          <div class="row g-2 small">
             <div class="col-6">
-              <label class="form-label required">Date</label>
-              <input type="date" name="date" id="weight_date" class="form-control form-control-sm" required>
+              <div class="text-muted">Started</div>
+              <div id="weightPlanStart" class="fw-medium">—</div>
             </div>
             <div class="col-6">
-              <label class="form-label required">Time of day</label>
-              <select name="time_of_day" id="weight_time" class="form-select form-select-sm">
-                <option value="morning">Morning (Empty crop)</option>
-                <option value="evening">Evening (After feed)</option>
-              </select>
+              <div class="text-muted">Target weight</div>
+              <div id="weightPlanTarget" class="fw-medium">—</div>
             </div>
             <div class="col-6">
-              <label class="form-label required">Weight (grams)</label>
-              <input type="number" name="weight_grams" id="weight_grams_input" class="form-control form-control-sm" min="0" required>
+              <div class="text-muted">Program</div>
+              <div id="weightPlanProgram" class="fw-medium">—</div>
             </div>
             <div class="col-6">
-              <label class="form-label">Notes</label>
-              <input type="text" name="notes" id="weight_notes_input" class="form-control form-control-sm" placeholder="e.g. Moisture drop normal">
+              <div class="text-muted">Feed / diet</div>
+              <div id="weightPlanFeed" class="fw-medium">—</div>
             </div>
           </div>
-          <div class="mt-3 text-end">
-            <button type="submit" class="btn btn-sm btn-primary">
-              <i class="fas fa-plus me-1"></i>Record Weight
-            </button>
+        </div>
+
+        <form id="weightForm" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="bird_id" id="weight_bird_id">
+
+          <div class="dh-form-tabs" data-form-tabs>
+            <div class="dh-form-tab-nav" role="tablist" aria-label="Conditioning weight steps">
+              <button type="button" class="dh-form-tab is-active" id="weightTabLogBtn" data-form-tab data-tab-target="weightTabLog" role="tab" aria-controls="weightTabLog" aria-selected="true">
+                <span class="dh-form-tab-index">1</span><span class="dh-form-tab-label">Log weight</span>
+              </button>
+              <button type="button" class="dh-form-tab" id="weightTabHistoryBtn" data-form-tab data-tab-target="weightTabHistory" role="tab" aria-controls="weightTabHistory" aria-selected="false" tabindex="-1">
+                <span class="dh-form-tab-index">2</span><span class="dh-form-tab-label">History</span>
+              </button>
+            </div>
+
+            <div class="dh-form-tab-pane is-active" id="weightTabLog" data-form-tab-pane role="tabpanel" aria-labelledby="weightTabLogBtn" aria-hidden="false">
+              <div class="dh-form-section-title mb-3">Daily conditioning entry</div>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label required">Date</label>
+                  <input type="date" name="date" id="weight_date" class="form-control form-control-sm" required>
+                </div>
+                <div class="col-6">
+                  <label class="form-label required">Time of day</label>
+                  <select name="time_of_day" id="weight_time" class="form-select form-select-sm">
+                    <option value="morning">Morning (Empty crop)</option>
+                    <option value="evening">Evening (After feed)</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label required">Weight (grams)</label>
+                  <input type="number" name="weight_grams" id="weight_grams_input" class="form-control form-control-sm" min="0" required>
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Notes</label>
+                  <input type="text" name="notes" id="weight_notes_input" class="form-control form-control-sm" placeholder="e.g. Moisture drop normal">
+                </div>
+              </div>
+              <div class="dh-form-tab-actions">
+                <span class="dh-form-tab-hint">Fields marked <span class="text-danger">*</span> are required.</span>
+                <button type="submit" class="btn btn-sm btn-primary ms-auto">
+                  <i class="fas fa-plus me-1"></i>Record Weight
+                </button>
+              </div>
+            </div>
+
+            <div class="dh-form-tab-pane" id="weightTabHistory" data-form-tab-pane role="tabpanel" aria-labelledby="weightTabHistoryBtn" aria-hidden="true" hidden>
+              <div class="dh-form-section-title mb-3">Recorded weights</div>
+              <div id="weightLogsList" class="list-group list-group-flush" style="max-height: 260px; overflow-y: auto;">
+                <div class="list-group-item text-muted">Loading weight entries…</div>
+              </div>
+              <div class="dh-form-tab-actions">
+                <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back to log</button>
+              </div>
+            </div>
           </div>
         </form>
       </div>
@@ -852,6 +1140,26 @@
 
   const memberForm = document.getElementById('memberForm');
   const healthForm = document.getElementById('healthForm');
+  const memberStatusField = document.getElementById('member_status');
+  const conditioningFieldIds = [
+    'member_conditioning_start_date',
+    'member_target_weight',
+    'member_conditioning_program',
+    'member_conditioning_feed_plan',
+  ];
+
+  function syncConditioningRequirements() {
+    const isConditioning = memberStatusField.value === 'Conditioning';
+    conditioningFieldIds.forEach(function (id) {
+      const field = document.getElementById(id);
+      if (field) field.required = isConditioning;
+    });
+    memberForm.querySelectorAll('[data-conditioning-label]').forEach(function (label) {
+      label.classList.toggle('required', isConditioning);
+    });
+  }
+
+  memberStatusField.addEventListener('change', syncConditioningRequirements);
 
   const memberErrorBox = document.getElementById('memberFormError');
   const healthErrorBox = document.getElementById('healthFormError');
@@ -861,6 +1169,14 @@
   const SAVE_MEMBER_URL = "{% url 'info:info_save_ajax' %}";
   const SAVE_HEALTH_URL = "{% url 'info:health_record_save_ajax' %}";
   const DELETE_HEALTH_URL = "{% url 'info:health_record_delete_ajax' 0 %}";
+  const FIGHT_LIST_URL = "{% url 'info:fight_records_ajax' 0 %}";
+  const FIGHT_DELETE_URL = "{% url 'info:fight_record_delete_ajax' 0 %}";
+  const WEIGHT_LIST_URL = "{% url 'info:weight_logs_ajax' 0 %}";
+  const WEIGHT_DELETE_URL = "{% url 'info:weight_log_delete_ajax' 0 %}";
+
+  function withId(url, id) {
+    return url.replace(/\/0\/$/, '/' + id + '/');
+  }
 
   let deleteUrl = null;
   let activeHealthUrl = null;
@@ -883,11 +1199,10 @@
 
   function setText(id, value) {
     const element = document.getElementById(id);
-    if (element) {
-      element.textContent = (value === null || value === undefined || value === '')
-        ? 'Unknown'
-        : value;
-    }
+    if (!element) return;
+    // Only fall back for missing values; an explicit empty string stays blank
+    // (e.g. an unknown breed should not render the word "Unknown").
+    element.textContent = (value === null || value === undefined) ? 'Unknown' : value;
   }
 
   function showAlert(message, variant) {
@@ -918,6 +1233,8 @@
   memberModalEl.addEventListener('show.bs.modal', function (event) {
     clearError(memberErrorBox);
     memberForm.reset();
+    syncConditioningRequirements();
+    if (window.DHFormTabs) window.DHFormTabs.reset(memberForm);
     document.getElementById('member_id').value = '';
     document.getElementById('member_new_breed').value = '';
     document.getElementById('member_wins').value = '0';
@@ -927,6 +1244,10 @@
     document.getElementById('member_leg_color').value = 'Yellow';
     document.getElementById('member_color').value = '';
     document.getElementById('member_cage_number').value = '';
+    document.getElementById('member_conditioning_start_date').value = '';
+    document.getElementById('member_target_weight').value = '';
+    document.getElementById('member_conditioning_program').value = '';
+    document.getElementById('member_conditioning_feed_plan').value = '';
     document.getElementById('memberModalTitle').textContent = 'Add flock member';
 
     const button = event.relatedTarget;
@@ -950,13 +1271,19 @@
     document.getElementById('member_leg_color').value = button.dataset.legColor || 'Yellow';
     document.getElementById('member_color').value = button.dataset.color || '';
     document.getElementById('member_cage_number').value = button.dataset.cageNumber || '';
+    document.getElementById('member_conditioning_start_date').value = button.dataset.conditioningStart || '';
+    document.getElementById('member_target_weight').value = button.dataset.targetWeight || '';
+    document.getElementById('member_conditioning_program').value = button.dataset.conditioningProgram || '';
+    document.getElementById('member_conditioning_feed_plan').value = button.dataset.conditioningFeed || '';
     document.getElementById('member_sire').value = button.dataset.sire || '';
     document.getElementById('member_dam').value = button.dataset.dam || '';
+    syncConditioningRequirements();
   });
 
   memberForm.addEventListener('submit', function (event) {
     event.preventDefault();
     clearError(memberErrorBox);
+    if (window.DHFormTabs && !window.DHFormTabs.validate(memberForm)) return;
 
     const submitBtn = document.getElementById('memberSubmitBtn');
     submitBtn.disabled = true;
@@ -1031,25 +1358,40 @@
     document.getElementById('health_record_id').value = '';
     document.getElementById('health_record_type').value = 'Vaccination';
     document.getElementById('health_title').value = '';
+    document.getElementById('bird_medicine_picker').value = '';
     document.getElementById('health_next_due_date').value = '';
     document.getElementById('health_notes').value = '';
     document.getElementById('health_date_administered').value = new Date().toISOString().slice(0, 10);
     document.getElementById('healthSubmitBtn').textContent = 'Add health record';
     document.getElementById('healthCancelEditBtn').classList.add('d-none');
     document.getElementById('healthFormTitle').textContent = 'Add health record';
+    if (window.DHFormTabs) window.DHFormTabs.reset(healthForm);
     clearError(healthErrorBox);
+  }
+
+  const birdMedicinePicker = document.getElementById('bird_medicine_picker');
+  if (birdMedicinePicker) {
+    birdMedicinePicker.addEventListener('change', function () {
+      const option = this.options[this.selectedIndex];
+      if (!option || !option.value) return;
+      document.getElementById('health_title').value = option.value;
+      const recordType = option.dataset.recordType;
+      if (recordType) document.getElementById('health_record_type').value = recordType;
+    });
   }
 
   function editHealthRecord(record) {
     document.getElementById('health_record_id').value = record.id;
     document.getElementById('health_record_type').value = record.record_type;
     document.getElementById('health_title').value = record.title;
+    document.getElementById('bird_medicine_picker').value = '';
     document.getElementById('health_date_administered').value = record.date_administered;
     document.getElementById('health_next_due_date').value = record.next_due_date || '';
     document.getElementById('health_notes').value = record.notes || '';
     document.getElementById('healthSubmitBtn').textContent = 'Save changes';
     document.getElementById('healthCancelEditBtn').classList.remove('d-none');
     document.getElementById('healthFormTitle').textContent = 'Edit health record';
+    if (window.DHFormTabs) window.DHFormTabs.activate(healthForm, 'birdHealthTabDetails');
     clearError(healthErrorBox);
     document.getElementById('health_title').focus();
   }
@@ -1177,6 +1519,7 @@
 
   document.getElementById('healthSubmitBtn').addEventListener('click', function () {
     clearError(healthErrorBox);
+    if (window.DHFormTabs && !window.DHFormTabs.validate(healthForm)) return;
     const button = this;
     button.disabled = true;
 
@@ -1309,6 +1652,9 @@
       .then(data => {
         if (data.status === 'success') refresh();
         else alert(data.error);
+      })
+      .catch(function (error) {
+        alert(error.message || 'Could not update the selected birds.');
       });
   };
 
@@ -1326,6 +1672,9 @@
       .then(data => {
         if (data.status === 'success') refresh();
         else alert(data.error);
+      })
+      .catch(function (error) {
+        alert(error.message || 'Could not delete the selected birds.');
       });
   };
 
@@ -1339,7 +1688,7 @@
     const list = document.getElementById('fightRecordsList');
     list.innerHTML = '<div class="list-group-item text-muted">Loading fights…</div>';
 
-    fetch(`/info/ajax/fight/${birdId}/`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    fetch(withId(FIGHT_LIST_URL, birdId), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(r => r.json())
       .then(data => {
         document.getElementById('fightCareerRecord').textContent = `${data.wins}W – ${data.losses}L – ${data.draws}D`;
@@ -1366,6 +1715,10 @@
             </div>
           `;
         }).join('');
+      })
+      .catch(function (error) {
+        list.innerHTML = '<div class="list-group-item text-danger">' +
+          escapeHtml(error.message || 'Could not load fight records.') + '</div>';
       });
   }
 
@@ -1412,9 +1765,16 @@
     if (!confirm('Delete this fight record?')) return;
     const formData = new FormData();
     formData.append('csrfmiddlewaretoken', csrfToken(fightForm));
-    fetch(`/info/ajax/fight/delete/${id}/`, { method: 'POST', body: formData })
+    fetch(withId(FIGHT_DELETE_URL, id), { method: 'POST', body: formData })
       .then(r => r.json())
-      .then(() => loadFightRecords(activeFightBirdId));
+      .then(data => {
+        if (data.error) throw new Error(data.error);
+        loadFightRecords(activeFightBirdId);
+        if (typeof window.refreshMainContent === 'function') {
+          setTimeout(window.refreshMainContent, 800);
+        }
+      })
+      .catch(err => showError(fightErrorBox, err.message));
   };
 
   // --- Weight Logs ---
@@ -1427,7 +1787,7 @@
     const list = document.getElementById('weightLogsList');
     list.innerHTML = '<div class="list-group-item text-muted">Loading weights…</div>';
 
-    fetch(`/info/ajax/weight/${birdId}/`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    fetch(withId(WEIGHT_LIST_URL, birdId), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(r => r.json())
       .then(data => {
         if (!data.data || !data.data.length) {
@@ -1447,7 +1807,28 @@
             </button>
           </div>
         `).join('');
+      })
+      .catch(function (error) {
+        list.innerHTML = '<div class="list-group-item text-danger">' +
+          escapeHtml(error.message || 'Could not load weight logs.') + '</div>';
       });
+  }
+
+  function updateWeightPlanSummary(button) {
+    const summary = document.getElementById('weightPlanSummary');
+    if (!summary) return;
+    const start = button.dataset.conditioningStart || '';
+    const target = button.dataset.targetWeight || '';
+    const program = button.dataset.conditioningProgram || '';
+    const feed = button.dataset.conditioningFeed || '';
+
+    document.getElementById('weightPlanStart').textContent = start || '—';
+    document.getElementById('weightPlanTarget').textContent = target ? target + ' g' : '—';
+    document.getElementById('weightPlanProgram').textContent = program || '—';
+    document.getElementById('weightPlanFeed').textContent = feed || '—';
+
+    const hasPlan = start || target || program || feed;
+    summary.classList.toggle('d-none', !hasPlan);
   }
 
   if (weightModalEl) {
@@ -1455,17 +1836,19 @@
       const button = event.relatedTarget;
       activeWeightBirdId = button.dataset.id;
       document.getElementById('weightBirdTag').textContent = button.dataset.tagNumber || '';
+      weightForm.reset();
+      if (window.DHFormTabs) window.DHFormTabs.reset(weightForm);
       document.getElementById('weight_bird_id').value = activeWeightBirdId;
       document.getElementById('weight_date').value = new Date().toISOString().slice(0, 10);
-      weightForm.reset();
-      document.getElementById('weight_bird_id').value = activeWeightBirdId;
       clearError(weightErrorBox);
+      updateWeightPlanSummary(button);
       loadWeightLogs(activeWeightBirdId);
     });
 
     weightForm.addEventListener('submit', function (e) {
       e.preventDefault();
       clearError(weightErrorBox);
+      if (window.DHFormTabs && !window.DHFormTabs.validate(weightForm)) return;
 
       fetch("{% url 'info:weight_log_save_ajax' %}", {
         method: 'POST',
@@ -1481,6 +1864,7 @@
         weightForm.reset();
         document.getElementById('weight_bird_id').value = activeWeightBirdId;
         document.getElementById('weight_date').value = new Date().toISOString().slice(0, 10);
+        if (window.DHFormTabs) window.DHFormTabs.reset(weightForm);
         loadWeightLogs(activeWeightBirdId);
       })
       .catch(err => showError(weightErrorBox, err.message));
@@ -1490,10 +1874,84 @@
   window.deleteWeightLog = function (id) {
     const formData = new FormData();
     formData.append('csrfmiddlewaretoken', csrfToken(weightForm));
-    fetch(`/info/ajax/weight/delete/${id}/`, { method: 'POST', body: formData })
+    fetch(withId(WEIGHT_DELETE_URL, id), { method: 'POST', body: formData })
       .then(r => r.json())
-      .then(() => loadWeightLogs(activeWeightBirdId));
+      .then(data => {
+        if (data.error) throw new Error(data.error);
+        loadWeightLogs(activeWeightBirdId);
+        if (typeof window.refreshMainContent === 'function') {
+          setTimeout(window.refreshMainContent, 800);
+        }
+      })
+      .catch(err => showError(weightErrorBox, err.message));
   };
+})();
+</script>
+<script>
+(function () {
+  const form = document.getElementById('quickConditioningForm');
+  if (!form) return;
+
+  const errorBox = document.getElementById('quickConditioningError');
+  const programSelect = document.getElementById('quick_cond_program');
+  const customWrap = document.getElementById('quickCondCustomWrap');
+  const customInput = document.getElementById('quick_cond_custom');
+  const submitBtn = document.getElementById('quickConditioningSubmit');
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.classList.remove('d-none');
+  }
+
+  function clearError() {
+    errorBox.textContent = '';
+    errorBox.classList.add('d-none');
+  }
+
+  function toggleCustomProgram() {
+    const isCustom = programSelect.value === 'Custom';
+    customWrap.classList.toggle('d-none', !isCustom);
+    customInput.required = isCustom;
+    if (!isCustom) customInput.value = '';
+  }
+
+  programSelect.addEventListener('change', toggleCustomProgram);
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    clearError();
+
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    submitBtn.disabled = true;
+
+    fetch("{% url 'info:conditioning_save_ajax' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value },
+      body: new FormData(form),
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not start conditioning.');
+        return data;
+      })
+      .then(function () {
+        if (typeof window.refreshMainContent === 'function') {
+          window.refreshMainContent();
+        } else {
+          window.location.reload();
+        }
+      })
+      .catch(function (error) {
+        showError(error.message);
+      })
+      .finally(function () {
+        submitBtn.disabled = false;
+      });
+  });
 })();
 </script>
 {% endblock %}

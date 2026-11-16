@@ -35,6 +35,7 @@
             <div class="page-body">
                 <div class="container-xl">
                     <turbo-frame id="main-content" class="d-block" tabindex="-1" data-turbo-action="advance" data-current-url="{{ request.get_full_path }}">
+                        {% include 'theme/messages.html' %}
                         {% block content %}
                         {% endblock %}
                     </turbo-frame>
@@ -49,6 +50,7 @@
     <script src="{% static 'js/tabler-theme.js' %}"></script>
     <script src="{% static 'libs/@hotwired/turbo/dist/turbo.es2017-umd.js' %}"></script>
     <script src="{% static 'js/tabler.js' %}"></script>
+    <script src="{% static 'js/form-tabs.js' %}"></script>
     <script>
       // Tabler bundles Bootstrap and exposes it as `tabler.bootstrap`.
       // Inline page scripts use the familiar global `bootstrap` object.
@@ -84,10 +86,39 @@
       };
 
       function updateActiveSidebarLink() {
-        document.querySelectorAll(".dh-sidebar .nav-link").forEach(function (link) {
-          const linkPath = new URL(link.href, window.location.href).pathname;
-          const isActive = window.location.pathname === linkPath ||
-            (linkPath !== "/" && window.location.pathname.startsWith(linkPath));
+        const currentPath = window.location.pathname;
+        const currentParams = new URLSearchParams(window.location.search);
+        const links = Array.from(document.querySelectorAll(".dh-sidebar .nav-link"));
+
+        // Some menu entries share the same path but differ by query string
+        // (for example "Flock" -> /info/ and "Conditioning" ->
+        // /info/?status=Conditioning). A filtered link counts as a match when
+        // all of its query parameters are present in the current URL, so
+        // extra params such as ?status=Conditioning&q=rooster still match.
+        function isFilteredMatch(linkUrl) {
+          if (!linkUrl.search) return false;
+          for (const [key, value] of new URLSearchParams(linkUrl.search)) {
+            if (currentParams.get(key) !== value) return false;
+          }
+          return true;
+        }
+
+        const filteredMatch = links.some(function (link) {
+          const linkUrl = new URL(link.href, window.location.href);
+          return linkUrl.pathname === currentPath && isFilteredMatch(linkUrl);
+        });
+
+        links.forEach(function (link) {
+          const linkUrl = new URL(link.href, window.location.href);
+          // Match the exact path (not a shared prefix) and, when the link
+          // carries a filter such as ?status=Conditioning, its query params.
+          let isActive = linkUrl.pathname === currentPath;
+          if (isActive && linkUrl.search) {
+            isActive = isFilteredMatch(linkUrl);
+          } else if (isActive && filteredMatch) {
+            // A filtered sibling link is the real match here.
+            isActive = false;
+          }
           link.classList.toggle("active", isActive);
         });
       }

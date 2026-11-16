@@ -27,6 +27,90 @@
     </div>
   </div>
 
+  <div class="card mb-3 dh-inline-form" id="quickPenCard">
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+      <div>
+        <div class="card-title mb-0">
+          <i class="fas fa-heart text-danger" aria-hidden="true"></i>
+          Pair a new breeding pen
+        </div>
+        <div class="text-muted small">
+          Choose a broodcock and broodhen from your flock, then set the pairing date and status.
+        </div>
+      </div>
+      <span class="badge bg-pink text-white ms-auto">Breeding</span>
+    </div>
+    <form id="quickPenForm" novalidate>
+      {% csrf_token %}
+      <div class="card-body">
+        <div class="dh-form-requirements mb-3">
+          <span class="dh-req-title">Breeding requirements</span>
+          <ul>
+            <li><span class="text-danger">*</span> Pen number / identifier</li>
+            <li><span class="text-danger">*</span> Sire — cock or stag</li>
+            <li><span class="text-danger">*</span> Dam — hen or pullet</li>
+            <li><span class="text-danger">*</span> Date paired</li>
+            <li><span class="text-danger">*</span> Status</li>
+            <li>Notes / expected bloodline</li>
+          </ul>
+        </div>
+        <div class="row g-3">
+          <div class="col-sm-6 col-lg-2">
+            <label class="form-label required" for="qpen_number">Pen number</label>
+            <input type="text" name="pen_number" id="qpen_number" class="form-control"
+                   maxlength="50" placeholder="e.g. Pen 101" required>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label required" for="qpen_sire">Broodcock / Stag (Sire)</label>
+            <select name="sire" id="qpen_sire" class="form-select" required>
+              <option value="">— Select sire —</option>
+              {% for c in cocks %}
+                <option value="{{ c.id }}">
+                  {{ c.tag_number }} — {{ c.breed.name|default:"Unclassified" }} • {{ c.gender }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label required" for="qpen_dam">Broodhen / Pullet (Dam)</label>
+            <select name="dam" id="qpen_dam" class="form-select" required>
+              <option value="">— Select dam —</option>
+              {% for h in hens %}
+                <option value="{{ h.id }}">
+                  {{ h.tag_number }} — {{ h.breed.name|default:"Unclassified" }} • {{ h.gender }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 col-lg-2">
+            <label class="form-label required" for="qpen_date">Date paired</label>
+            <input type="date" name="date_paired" id="qpen_date" class="form-control"
+                   value="{% now 'Y-m-d' %}" required>
+          </div>
+          <div class="col-sm-6 col-lg-2">
+            <label class="form-label required" for="qpen_status">Status</label>
+            <select name="status" id="qpen_status" class="form-select" required>
+              <option value="active">Active pairing</option>
+              <option value="resting">Resting</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="qpen_notes">Notes / expected bloodline</label>
+            <input type="text" name="notes" id="qpen_notes" class="form-control"
+                   placeholder="e.g. Crossing Sweater male on Kelso female for the 2027 derby season">
+          </div>
+        </div>
+        <div id="quickPenError" class="alert alert-danger d-none mt-3 mb-0" role="alert"></div>
+      </div>
+      <div class="card-footer d-flex flex-wrap justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary" id="quickPenSubmit">
+          <i class="fas fa-heart me-2"></i>Save breeding pen
+        </button>
+      </div>
+    </form>
+  </div>
+
   <div class="row row-cards">
     {% for pen in pens %}
       <div class="col-md-6 col-lg-4">
@@ -43,44 +127,126 @@
             </button>
           </div>
           <div class="card-body">
-            <div class="d-flex justify-content-around align-items-center text-center py-2 mb-3 bg-light-lt rounded">
-              <div>
-                <span class="badge bg-blue text-white mb-1"><i class="fas fa-mars me-1"></i>Sire</span>
-                <div class="fw-bold fs-4">{{ pen.sire.tag_number }}</div>
-                <div class="text-muted small">{{ pen.sire.breed.name|default:"Pure" }}</div>
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <div class="dh-breed-bird h-100">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-blue text-white"><i class="fas fa-mars me-1"></i>Sire</span>
+                    <span class="text-muted small">{{ pen.sire.status }}</span>
+                  </div>
+                  <div class="fw-bold fs-5 lh-1 mb-1">{{ pen.sire.tag_number }}</div>
+                  <div class="text-muted small text-truncate" title="{{ pen.sire.breed.name|default:'Pure' }}">
+                    {{ pen.sire.breed.name|default:"Pure" }}
+                  </div>
+                  <div class="dh-record small mt-1">
+                    <span class="dh-record-wins">{{ pen.sire.wins }}W</span>
+                    <span class="dh-record-sep">&ndash;</span>
+                    <span class="dh-record-losses">{{ pen.sire.losses }}L</span>
+                    {% if pen.sire.draws %}
+                      <span class="dh-record-sep">&ndash;</span>
+                      <span class="text-muted">{{ pen.sire.draws }}D</span>
+                    {% endif %}
+                  </div>
+                </div>
               </div>
-              <div class="text-muted fs-3"><i class="fas fa-heart text-danger"></i></div>
-              <div>
-                <span class="badge bg-pink text-white mb-1"><i class="fas fa-venus me-1"></i>Dam</span>
-                <div class="fw-bold fs-4">{{ pen.dam.tag_number }}</div>
-                <div class="text-muted small">{{ pen.dam.breed.name|default:"Pure" }}</div>
+              <div class="col-6">
+                <div class="dh-breed-bird h-100">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-pink text-white"><i class="fas fa-venus me-1"></i>Dam</span>
+                    <span class="text-muted small">{{ pen.dam.status }}</span>
+                  </div>
+                  <div class="fw-bold fs-5 lh-1 mb-1">{{ pen.dam.tag_number }}</div>
+                  <div class="text-muted small text-truncate" title="{{ pen.dam.breed.name|default:'Pure' }}">
+                    {{ pen.dam.breed.name|default:"Pure" }}
+                  </div>
+                  <div class="dh-record small mt-1">
+                    <span class="dh-record-wins">{{ pen.dam.wins }}W</span>
+                    <span class="dh-record-sep">&ndash;</span>
+                    <span class="dh-record-losses">{{ pen.dam.losses }}L</span>
+                    {% if pen.dam.draws %}
+                      <span class="dh-record-sep">&ndash;</span>
+                      <span class="text-muted">{{ pen.dam.draws }}D</span>
+                    {% endif %}
+                  </div>
+                </div>
               </div>
             </div>
 
             <div class="small text-muted mb-3">
               <div><i class="far fa-calendar me-1"></i>Paired: <strong>{{ pen.date_paired|date:"M j, Y" }}</strong></div>
-              {% if pen.notes %}<div><i class="fas fa-info-circle me-1"></i>{{ pen.notes }}</div>{% endif %}
+              {% if pen.notes %}
+                <div class="text-truncate" title="{{ pen.notes }}"><i class="fas fa-info-circle me-1"></i>{{ pen.notes }}</div>
+              {% endif %}
+            </div>
+
+            <div class="dh-breed-stats mb-3">
+              <div class="dh-breed-stat">
+                <span class="dh-breed-stat-value">{{ pen.total_clutches }}</span>
+                <span class="dh-breed-stat-label">Clutches</span>
+              </div>
+              <div class="dh-breed-stat">
+                <span class="dh-breed-stat-value">{{ pen.total_eggs }}</span>
+                <span class="dh-breed-stat-label">Eggs</span>
+              </div>
+              <div class="dh-breed-stat">
+                <span class="dh-breed-stat-value">{{ pen.total_fertile_eggs }}</span>
+                <span class="dh-breed-stat-label">Fertile</span>
+              </div>
+              <div class="dh-breed-stat">
+                <span class="dh-breed-stat-value">{{ pen.total_hatched }}</span>
+                <span class="dh-breed-stat-label">Hatched</span>
+              </div>
+              <div class="dh-breed-stat">
+                <span class="dh-breed-stat-value">{{ pen.fertility_rate }}%</span>
+                <span class="dh-breed-stat-label">Fertility</span>
+              </div>
+              <div class="dh-breed-stat">
+                <span class="dh-breed-stat-value">{{ pen.hatchability_rate }}%</span>
+                <span class="dh-breed-stat-label">Hatch rate</span>
+              </div>
             </div>
 
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <span class="fw-semibold small text-uppercase text-muted">Clutches ({{ pen.clutches.count }})</span>
+              <span class="fw-semibold small text-uppercase text-muted">Clutch records ({{ pen.total_clutches }})</span>
               <button type="button" class="btn btn-xs btn-outline-primary" onclick="openClutchModal({{ pen.id }})">
                 <i class="fas fa-egg me-1"></i>Add Clutch
               </button>
             </div>
 
-            <div class="list-group list-group-flush border-top">
-              {% for clutch in pen.clutches.all %}
-                <div class="list-group-item px-0 py-2 small d-flex justify-content-between align-items-center">
-                  <div>
-                    <span class="fw-bold">Clutch #{{ clutch.clutch_number|default:forloop.counter }}</span>
-                    <span class="text-muted d-block">{{ clutch.date_started|date:"M j" }} &bull; {{ clutch.eggs_collected }} eggs &bull; {{ clutch.hatched_count }} hatched</span>
-                  </div>
-                  <span class="badge bg-success-lt font-monospace">{{ clutch.hatchability_rate }}%</span>
-                </div>
-              {% empty %}
-                <div class="py-3 text-center text-muted small">No egg clutches recorded yet.</div>
-              {% endfor %}
+            <div class="table-responsive">
+              <table class="table table-sm table-vcenter mb-0 dh-breed-records">
+                <thead>
+                  <tr>
+                    <th>Clutch</th>
+                    <th class="text-end">Eggs</th>
+                    <th class="text-end">Fertile</th>
+                    <th class="text-end">Hatched</th>
+                    <th class="text-end">Hatch</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for clutch in pen.clutches.all %}
+                    <tr>
+                      <td>
+                        <div class="fw-semibold">#{{ clutch.clutch_number|default:forloop.counter }}</div>
+                        <div class="text-muted small">{{ clutch.date_started|date:"M j, Y" }}</div>
+                      </td>
+                      <td class="text-end">{{ clutch.eggs_collected }}</td>
+                      <td class="text-end">{{ clutch.fertile_eggs }}</td>
+                      <td class="text-end">{{ clutch.hatched_count }}</td>
+                      <td class="text-end">
+                        <span class="badge {% if clutch.hatchability_rate >= 75 %}bg-success-lt{% elif clutch.hatchability_rate >= 50 %}bg-warning-lt{% else %}bg-danger-lt{% endif %}">
+                          {{ clutch.hatchability_rate }}%
+                        </span>
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="5" class="text-center text-muted py-3 small mb-0">No egg clutches recorded yet.</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -105,7 +271,7 @@
   <div class="modal modal-blur fade" id="penModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
-        <form id="penForm">
+        <form id="penForm" novalidate>
           {% csrf_token %}
           <input type="hidden" name="id" id="pen_id">
           <div class="modal-header">
@@ -114,47 +280,107 @@
           </div>
           <div class="modal-body">
             <div id="penError" class="alert alert-danger d-none"></div>
-            <div class="mb-3">
-              <label class="form-label required">Pen number / identifier</label>
-              <input type="text" name="pen_number" id="pen_number" class="form-control" placeholder="e.g. Pen 101" required>
-            </div>
-            <div class="row g-3 mb-3">
-              <div class="col-6">
-                <label class="form-label required">Broodcock / Stag (Sire)</label>
-                <select name="sire" id="pen_sire" class="form-select" required>
-                  <option value="">Select Sire...</option>
-                  {% for c in cocks %}
-                    <option value="{{ c.id }}">{{ c.tag_number }} ({{ c.breed.name|default:"Unclassified" }})</option>
-                  {% endfor %}
-                </select>
+
+            <div class="dh-form-tabs" data-form-tabs>
+              <div class="dh-form-tab-nav" role="tablist" aria-label="Breeding pen steps">
+                <button type="button" class="dh-form-tab is-active" id="penTabPairBtn" data-form-tab data-tab-target="penTabPair" role="tab" aria-controls="penTabPair" aria-selected="true">
+                  <span class="dh-form-tab-index">1</span><span class="dh-form-tab-label">Pairing</span>
+                </button>
+                <button type="button" class="dh-form-tab" id="penTabScheduleBtn" data-form-tab data-tab-target="penTabSchedule" role="tab" aria-controls="penTabSchedule" aria-selected="false" tabindex="-1">
+                  <span class="dh-form-tab-index">2</span><span class="dh-form-tab-label">Schedule &amp; status</span>
+                </button>
+                <button type="button" class="dh-form-tab" id="penTabNotesBtn" data-form-tab data-tab-target="penTabNotes" role="tab" aria-controls="penTabNotes" aria-selected="false" tabindex="-1">
+                  <span class="dh-form-tab-index">3</span><span class="dh-form-tab-label">Notes</span>
+                </button>
               </div>
-              <div class="col-6">
-                <label class="form-label required">Broodhen / Pullet (Dam)</label>
-                <select name="dam" id="pen_dam" class="form-select" required>
-                  <option value="">Select Dam...</option>
-                  {% for h in hens %}
-                    <option value="{{ h.id }}">{{ h.tag_number }} ({{ h.breed.name|default:"Unclassified" }})</option>
-                  {% endfor %}
-                </select>
+
+              <div class="dh-form-tab-pane is-active" id="penTabPair" data-form-tab-pane role="tabpanel" aria-labelledby="penTabPairBtn" aria-hidden="false">
+                <div class="dh-form-section-title mb-3">Breeding pair requirements</div>
+                <div class="mb-3">
+                  <label class="form-label required">Pen number / identifier</label>
+                  <input type="text" name="pen_number" id="pen_number" class="form-control" placeholder="e.g. Pen 101" required>
+                </div>
+                <div class="row g-3">
+                  <div class="col-6">
+                    <label class="form-label required">Broodcock / Stag (Sire)</label>
+                    <select name="sire" id="pen_sire" class="form-select" required>
+                      <option value="">Select Sire...</option>
+                      {% for c in cocks %}
+                        <option value="{{ c.id }}"
+                                data-breed="{{ c.breed.name|default:'Unclassified' }}"
+                                data-gender="{{ c.gender }}"
+                                data-status="{{ c.status }}"
+                                data-wins="{{ c.wins }}">
+                          {{ c.tag_number }} — {{ c.breed.name|default:"Unclassified" }} • {{ c.gender }} • {{ c.status }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label required">Broodhen / Pullet (Dam)</label>
+                    <select name="dam" id="pen_dam" class="form-select" required>
+                      <option value="">Select Dam...</option>
+                      {% for h in hens %}
+                        <option value="{{ h.id }}"
+                                data-breed="{{ h.breed.name|default:'Unclassified' }}"
+                                data-gender="{{ h.gender }}"
+                                data-status="{{ h.status }}"
+                                data-wins="{{ h.wins }}">
+                          {{ h.tag_number }} — {{ h.breed.name|default:"Unclassified" }} • {{ h.gender }} • {{ h.status }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+                <div class="row g-3 mt-1">
+                  <div class="col-md-6">
+                    <div class="alert alert-info py-2 small mb-0" id="sirePreview">
+                      <i class="fas fa-circle-info me-1"></i>Select a sire to see its breed, status, and record.
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="alert alert-info py-2 small mb-0" id="damPreview">
+                      <i class="fas fa-circle-info me-1"></i>Select a dam to see its breed, status, and record.
+                    </div>
+                  </div>
+                </div>
+                <div class="dh-form-tab-actions">
+                  <span class="dh-form-tab-hint">Fields marked <span class="text-danger">*</span> are required.</span>
+                  <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Schedule <i class="fas fa-arrow-right ms-1"></i></button>
+                </div>
               </div>
-            </div>
-            <div class="row g-3 mb-3">
-              <div class="col-6">
-                <label class="form-label required">Date paired</label>
-                <input type="date" name="date_paired" id="pen_date_paired" class="form-control" value="{% now 'Y-m-d' %}" required>
+
+              <div class="dh-form-tab-pane" id="penTabSchedule" data-form-tab-pane role="tabpanel" aria-labelledby="penTabScheduleBtn" aria-hidden="true" hidden>
+                <div class="dh-form-section-title mb-3">Pairing schedule</div>
+                <div class="row g-3">
+                  <div class="col-6">
+                    <label class="form-label required">Date paired</label>
+                    <input type="date" name="date_paired" id="pen_date_paired" class="form-control" value="{% now 'Y-m-d' %}" required>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label required">Status</label>
+                    <select name="status" id="pen_status" class="form-select">
+                      <option value="active">Active Pairing</option>
+                      <option value="resting">Resting</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="dh-form-tab-actions">
+                  <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                  <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Notes <i class="fas fa-arrow-right ms-1"></i></button>
+                </div>
               </div>
-              <div class="col-6">
-                <label class="form-label required">Status</label>
-                <select name="status" id="pen_status" class="form-select">
-                  <option value="active">Active Pairing</option>
-                  <option value="resting">Resting</option>
-                  <option value="completed">Completed</option>
-                </select>
+
+              <div class="dh-form-tab-pane" id="penTabNotes" data-form-tab-pane role="tabpanel" aria-labelledby="penTabNotesBtn" aria-hidden="true" hidden>
+                <div class="dh-form-section-title mb-3">Notes</div>
+                <label class="form-label">Notes / Expected bloodline</label>
+                <textarea name="notes" id="pen_notes" class="form-control" rows="3" placeholder="e.g. Crossing Sweater male on Kelso female for 2027 derby season."></textarea>
+                <div class="dh-form-tab-actions">
+                  <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                  <span class="dh-form-tab-hint ms-auto">All set — click <strong>Save Breeding Pen</strong> when ready.</span>
+                </div>
               </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Notes / Expected bloodline</label>
-              <textarea name="notes" id="pen_notes" class="form-control" rows="2" placeholder="e.g. Crossing Sweater male on Kelso female for 2027 derby season."></textarea>
             </div>
           </div>
           <div class="modal-footer">
@@ -170,7 +396,7 @@
   <div class="modal modal-blur fade" id="clutchModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
-        <form id="clutchForm">
+        <form id="clutchForm" novalidate>
           {% csrf_token %}
           <input type="hidden" name="pen_id" id="clutch_pen_id">
           <div class="modal-header">
@@ -179,37 +405,75 @@
           </div>
           <div class="modal-body">
             <div id="clutchError" class="alert alert-danger d-none"></div>
-            <div class="row g-3 mb-3">
-              <div class="col-6">
-                <label class="form-label">Clutch # / Batch</label>
-                <input type="text" name="clutch_number" class="form-control" placeholder="e.g. C-01">
+
+            <div class="dh-form-tabs" data-form-tabs>
+              <div class="dh-form-tab-nav" role="tablist" aria-label="Clutch steps">
+                <button type="button" class="dh-form-tab is-active" id="clutchTabDetailsBtn" data-form-tab data-tab-target="clutchTabDetails" role="tab" aria-controls="clutchTabDetails" aria-selected="true">
+                  <span class="dh-form-tab-index">1</span><span class="dh-form-tab-label">Clutch details</span>
+                </button>
+                <button type="button" class="dh-form-tab" id="clutchTabEggsBtn" data-form-tab data-tab-target="clutchTabEggs" role="tab" aria-controls="clutchTabEggs" aria-selected="false" tabindex="-1">
+                  <span class="dh-form-tab-index">2</span><span class="dh-form-tab-label">Egg counts</span>
+                </button>
+                <button type="button" class="dh-form-tab" id="clutchTabHatchBtn" data-form-tab data-tab-target="clutchTabHatch" role="tab" aria-controls="clutchTabHatch" aria-selected="false" tabindex="-1">
+                  <span class="dh-form-tab-index">3</span><span class="dh-form-tab-label">Hatch &amp; notes</span>
+                </button>
               </div>
-              <div class="col-6">
-                <label class="form-label required">Date started / Laid</label>
-                <input type="date" name="date_started" class="form-control" value="{% now 'Y-m-d' %}" required>
+
+              <div class="dh-form-tab-pane is-active" id="clutchTabDetails" data-form-tab-pane role="tabpanel" aria-labelledby="clutchTabDetailsBtn" aria-hidden="false">
+                <div class="dh-form-section-title mb-3">Clutch requirements</div>
+                <div class="row g-3">
+                  <div class="col-6">
+                    <label class="form-label">Clutch # / Batch</label>
+                    <input type="text" name="clutch_number" class="form-control" placeholder="e.g. C-01">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label required">Date started / Laid</label>
+                    <input type="date" name="date_started" class="form-control" value="{% now 'Y-m-d' %}" required>
+                  </div>
+                </div>
+                <div class="dh-form-tab-actions">
+                  <span class="dh-form-tab-hint">Fields marked <span class="text-danger">*</span> are required.</span>
+                  <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Egg counts <i class="fas fa-arrow-right ms-1"></i></button>
+                </div>
               </div>
-            </div>
-            <div class="row g-3 mb-3">
-              <div class="col-4">
-                <label class="form-label">Eggs collected</label>
-                <input type="number" name="eggs_collected" class="form-control" min="0" value="0">
+
+              <div class="dh-form-tab-pane" id="clutchTabEggs" data-form-tab-pane role="tabpanel" aria-labelledby="clutchTabEggsBtn" aria-hidden="true" hidden>
+                <div class="dh-form-section-title mb-3">Egg &amp; hatch counts</div>
+                <div class="row g-3">
+                  <div class="col-4">
+                    <label class="form-label">Eggs collected</label>
+                    <input type="number" name="eggs_collected" class="form-control" min="0" value="0">
+                  </div>
+                  <div class="col-4">
+                    <label class="form-label">Fertile eggs</label>
+                    <input type="number" name="fertile_eggs" class="form-control" min="0" value="0">
+                  </div>
+                  <div class="col-4">
+                    <label class="form-label">Chicks hatched</label>
+                    <input type="number" name="hatched_count" class="form-control" min="0" value="0">
+                  </div>
+                </div>
+                <div class="dh-form-tab-actions">
+                  <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                  <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Hatch &amp; notes <i class="fas fa-arrow-right ms-1"></i></button>
+                </div>
               </div>
-              <div class="col-4">
-                <label class="form-label">Fertile eggs</label>
-                <input type="number" name="fertile_eggs" class="form-control" min="0" value="0">
+
+              <div class="dh-form-tab-pane" id="clutchTabHatch" data-form-tab-pane role="tabpanel" aria-labelledby="clutchTabHatchBtn" aria-hidden="true" hidden>
+                <div class="dh-form-section-title mb-3">Hatch date &amp; notes</div>
+                <div class="mb-3">
+                  <label class="form-label">Hatch date (approx 21 days from incubation)</label>
+                  <input type="date" name="hatch_date" class="form-control">
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Notes (wing band numbers, incubator settings)</label>
+                  <textarea name="notes" class="form-control" rows="3" placeholder="e.g. Wing banded 101 to 108. Strong vigor."></textarea>
+                </div>
+                <div class="dh-form-tab-actions">
+                  <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
+                  <span class="dh-form-tab-hint ms-auto">All set — click <strong>Save Clutch</strong> when ready.</span>
+                </div>
               </div>
-              <div class="col-4">
-                <label class="form-label">Chicks hatched</label>
-                <input type="number" name="hatched_count" class="form-control" min="0" value="0">
-              </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Hatch date (approx 21 days from incubation)</label>
-              <input type="date" name="hatch_date" class="form-control">
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Notes (wing band numbers, incubator settings)</label>
-              <textarea name="notes" class="form-control" rows="2" placeholder="e.g. Wing banded 101 to 108. Strong vigor."></textarea>
             </div>
           </div>
           <div class="modal-footer">
@@ -226,13 +490,60 @@
 {% block extra_js %}
 <script>
   function openClutchModal(penId) {
+    const form = document.getElementById('clutchForm');
+    form.reset();
     document.getElementById('clutch_pen_id').value = penId;
+    document.querySelector('#clutchForm [name="date_started"]').value = "{% now 'Y-m-d' %}";
+    if (window.DHFormTabs) window.DHFormTabs.reset(form);
     new bootstrap.Modal(document.getElementById('clutchModal')).show();
+  }
+
+  const penModalEl = document.getElementById('penModal');
+
+  function updatePairPreview(selectId, previewId, label) {
+    const select = document.getElementById(selectId);
+    const preview = document.getElementById(previewId);
+    if (!select || !preview) return;
+    const option = select.options[select.selectedIndex];
+    if (!option || !option.value) {
+      preview.textContent = 'Select a ' + label + ' to see its breed, status, and record.';
+      return;
+    }
+    preview.textContent =
+      option.text.split(' — ')[0].trim() + ' — ' +
+      (option.dataset.breed || 'Unclassified') + ' • ' +
+      (option.dataset.gender || '') + ' • ' +
+      (option.dataset.status || '') + ' • ' +
+      (option.dataset.wins || 0) + ' win(s)';
+  }
+
+  function refreshPairPreviews() {
+    updatePairPreview('pen_sire', 'sirePreview', 'sire');
+    updatePairPreview('pen_dam', 'damPreview', 'dam');
+  }
+
+  ['pen_sire', 'pen_dam'].forEach(function (id) {
+    const select = document.getElementById(id);
+    if (select) select.addEventListener('change', refreshPairPreviews);
+  });
+
+  if (penModalEl) {
+    penModalEl.addEventListener('show.bs.modal', function () {
+      const form = document.getElementById('penForm');
+      form.reset();
+      document.getElementById('pen_date_paired').value = "{% now 'Y-m-d' %}";
+      document.getElementById('pen_status').value = 'active';
+      if (window.DHFormTabs) window.DHFormTabs.reset(form);
+      refreshPairPreviews();
+      document.getElementById('penError').classList.add('d-none');
+    });
   }
 
   document.getElementById('penForm').addEventListener('submit', function (e) {
     e.preventDefault();
-    const formData = new FormData(this);
+    const form = this;
+    if (window.DHFormTabs && !window.DHFormTabs.validate(form)) return;
+    const formData = new FormData(form);
     fetch("{% url 'info:breeding_pen_save_ajax' %}", {
       method: "POST",
       body: formData,
@@ -246,12 +557,18 @@
         document.getElementById('penError').textContent = data.error || 'Failed to save pen.';
         document.getElementById('penError').classList.remove('d-none');
       }
+    })
+    .catch(function (error) {
+      document.getElementById('penError').textContent = error.message || 'Failed to save pen.';
+      document.getElementById('penError').classList.remove('d-none');
     });
   });
 
   document.getElementById('clutchForm').addEventListener('submit', function (e) {
     e.preventDefault();
-    const formData = new FormData(this);
+    const form = this;
+    if (window.DHFormTabs && !window.DHFormTabs.validate(form)) return;
+    const formData = new FormData(form);
     fetch("{% url 'info:clutch_save_ajax' %}", {
       method: "POST",
       body: formData,
@@ -265,14 +582,20 @@
         document.getElementById('clutchError').textContent = data.error || 'Failed to save clutch.';
         document.getElementById('clutchError').classList.remove('d-none');
       }
+    })
+    .catch(function (error) {
+      document.getElementById('clutchError').textContent = error.message || 'Failed to save clutch.';
+      document.getElementById('clutchError').classList.remove('d-none');
     });
   });
+
+  const DELETE_PEN_URL = "{% url 'info:breeding_pen_delete_ajax' 0 %}";
 
   function deletePen(id) {
     if (!confirm('Are you sure you want to delete this breeding pen?')) return;
     const formData = new FormData();
     formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-    fetch(`/info/ajax/breeding/delete/${id}/`, {
+    fetch(DELETE_PEN_URL.replace(/\/0\/$/, '/' + id + '/'), {
       method: "POST",
       body: formData,
       headers: { "X-Requested-With": "XMLHttpRequest" }
@@ -280,7 +603,67 @@
     .then(r => r.json())
     .then(data => {
       if (data.status === 'success') window.location.reload();
+      else alert(data.error || 'Failed to delete pen.');
+    })
+    .catch(function (error) {
+      alert(error.message || 'Failed to delete pen.');
     });
   }
+</script>
+<script>
+(function () {
+  const form = document.getElementById('quickPenForm');
+  if (!form) return;
+
+  const errorBox = document.getElementById('quickPenError');
+  const submitBtn = document.getElementById('quickPenSubmit');
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.classList.remove('d-none');
+  }
+
+  function clearError() {
+    errorBox.textContent = '';
+    errorBox.classList.add('d-none');
+  }
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    clearError();
+
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    const formData = new FormData(form);
+    submitBtn.disabled = true;
+
+    fetch("{% url 'info:breeding_pen_save_ajax' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') },
+      body: formData,
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not save the breeding pen.');
+        return data;
+      })
+      .then(function () {
+        if (typeof window.refreshMainContent === 'function') {
+          window.refreshMainContent();
+        } else {
+          window.location.reload();
+        }
+      })
+      .catch(function (error) {
+        showError(error.message);
+      })
+      .finally(function () {
+        submitBtn.disabled = false;
+      });
+  });
+})();
 </script>
 {% endblock %}

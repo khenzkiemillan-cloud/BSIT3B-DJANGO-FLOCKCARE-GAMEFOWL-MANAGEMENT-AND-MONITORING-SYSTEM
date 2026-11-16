@@ -21,6 +21,7 @@ urlpatterns = [
     path('ajax/weight/<int:pk>/', views.weight_logs_ajax, name='weight_logs_ajax'),
     path('ajax/weight/save/', views.weight_log_save_ajax, name='weight_log_save_ajax'),
     path('ajax/weight/delete/<int:pk>/', views.weight_log_delete_ajax, name='weight_log_delete_ajax'),
+    path('ajax/conditioning/save/', views.conditioning_save_ajax, name='conditioning_save_ajax'),
 
     # Breeding Pens & Clutches
     path('breeding/', views.breeding_list_page, name='breeding_list'),

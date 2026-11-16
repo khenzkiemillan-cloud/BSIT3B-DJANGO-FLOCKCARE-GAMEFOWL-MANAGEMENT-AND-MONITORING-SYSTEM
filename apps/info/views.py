@@ -12,12 +12,18 @@ from django.db.models import Count, F, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
 from apps.core.scoping import scoped_flock_member, scoped_flock_members
+from .choices import (
+    COMMON_BREEDS, COMMON_MEDICINES, MEDICINE_UNITS, CONDITIONING_PROGRAMS,
+    record_type_for_category,
+)
 from .forms import (
     FlockMemberForm, HealthRecordForm, MedicineForm,
-    FightRecordForm, WeightLogForm, BreedingPenForm, ClutchRecordForm
+    FightRecordForm, WeightLogForm, BreedingPenForm, ClutchRecordForm,
+    ConditioningForm,
 )
 from .models import (
     Breed, FlockMember, HealthRecord, Medicine,
@@ -49,6 +55,41 @@ def _json_not_found(view_func):
     return wrapper
 
 
+def _health_medicine_options(user):
+    """Build the cabinet + common medicine list used by health record forms."""
+    options = []
+    seen = set()
+
+    for medicine in Medicine.objects.filter(user=user).order_by('name'):
+        name = (medicine.name or '').strip()
+        key = name.casefold()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        options.append({
+            'name': name,
+            'category': medicine.get_category_display(),
+            'record_type': record_type_for_category(medicine.category),
+            'in_cabinet': True,
+        })
+
+    for item in COMMON_MEDICINES:
+        key = item['name'].casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        options.append({
+            'name': item['name'],
+            'category': dict(Medicine.CATEGORY_CHOICES).get(
+                item['category'], item['category']
+            ),
+            'record_type': item['record_type'],
+            'in_cabinet': False,
+        })
+
+    return options
+
+
 def _resolve_breed(form, request):
     """Resolve the selected breed, creating one when a new name is supplied."""
     new_breed = (request.POST.get('new_breed') or '').strip()
@@ -62,6 +103,45 @@ def _resolve_breed(form, request):
     if breed is None:
         breed = Breed.objects.create(name=new_breed)
     return breed, None
+
+
+def _recalculate_fight_counters(bird):
+    """Refresh a bird's win/loss/draw totals from its remaining fight records."""
+    bird.wins = bird.fight_records.filter(result='win').count()
+    bird.losses = bird.fight_records.filter(result='loss').count()
+    bird.draws = bird.fight_records.filter(result='draw').count()
+    bird.save(update_fields=['wins', 'losses', 'draws'])
+    return bird
+
+
+def _sync_latest_weight(bird):
+    """Set the bird's stored weight to the most recent remaining weight log."""
+    latest = bird.weight_logs.order_by('-date', '-created_at').first()
+    bird.weight_grams = latest.weight_grams if latest else None
+    bird.save(update_fields=['weight_grams'])
+    return bird.weight_grams
+
+
+def _clean_int(value, default=0):
+    """Parse a spreadsheet cell into a non-negative integer."""
+    if value is None or str(value).strip() == '':
+        return default
+    try:
+        return max(0, int(float(str(value).strip())))
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _choice_value(value, choices, default):
+    """Map a spreadsheet cell onto a model choice value (case-insensitive)."""
+    raw = (value or '').strip()
+    if not raw:
+        return default
+    lowered = raw.lower()
+    for choice_value, choice_label in choices:
+        if lowered in (choice_value.lower(), str(choice_label).lower()):
+            return choice_value
+    return default
 
 
 @login_required(login_url='login')
@@ -116,10 +196,18 @@ def info_list_page(request):
     page_number = request.GET.get('page', 1)
     members = paginator.get_page(page_number)
     breeds = Breed.objects.all()
+    bird_tags = list(
+        members_list.order_by('tag_number').values_list('tag_number', flat=True)
+    )
 
     return render(request, 'info/info_list.html', {
         'members': members,
         'breeds': breeds,
+        'common_breeds': COMMON_BREEDS,
+        'conditioning_programs': CONDITIONING_PROGRAMS,
+        'bird_tags': bird_tags,
+        'farm_birds': scoped_flock_members(request.user).order_by('tag_number'),
+        'medicine_options': _health_medicine_options(request.user),
         'query': query,
         'status': status,
         'gender': gender,
@@ -165,6 +253,10 @@ def info_list_ajax(request):
         'draws': bird.draws,
         'cage_number': bird.cage_number,
         'image_url': bird.image.url if bird.image else '',
+        'conditioning_start_date': str(bird.conditioning_start_date) if bird.conditioning_start_date else '',
+        'target_weight_grams': bird.target_weight_grams,
+        'conditioning_program': bird.conditioning_program or '',
+        'conditioning_feed_plan': bird.conditioning_feed_plan or '',
     } for bird in page.object_list]
     return JsonResponse({
         'data': data,
@@ -199,6 +291,10 @@ def info_get_ajax(request, pk):
         'losses': bird.losses,
         'draws': bird.draws,
         'image_url': bird.image.url if bird.image else '',
+        'conditioning_start_date': str(bird.conditioning_start_date) if bird.conditioning_start_date else '',
+        'target_weight_grams': bird.target_weight_grams,
+        'conditioning_program': bird.conditioning_program or '',
+        'conditioning_feed_plan': bird.conditioning_feed_plan or '',
     })
 
 
@@ -309,15 +405,16 @@ def fight_record_save_ajax(request):
             status=400,
         )
 
+    previous_bird = record.bird if record is not None else None
     record = form.save(commit=False)
     record.bird = bird
     record.save()
 
-    # Recalculate bird counters
-    bird.wins = bird.fight_records.filter(result='win').count()
-    bird.losses = bird.fight_records.filter(result='loss').count()
-    bird.draws = bird.fight_records.filter(result='draw').count()
-    bird.save(update_fields=['wins', 'losses', 'draws'])
+    # Recalculate the new bird's counters, and the old bird's when a record was
+    # reassigned so neither bird keeps stale win/loss/draw totals.
+    _recalculate_fight_counters(bird)
+    if previous_bird is not None and previous_bird.pk != bird.pk:
+        _recalculate_fight_counters(previous_bird)
 
     return JsonResponse({
         'status': 'success',
@@ -340,10 +437,7 @@ def fight_record_delete_ajax(request, pk):
     bird = record.bird
     record.delete()
 
-    bird.wins = bird.fight_records.filter(result='win').count()
-    bird.losses = bird.fight_records.filter(result='loss').count()
-    bird.draws = bird.fight_records.filter(result='draw').count()
-    bird.save(update_fields=['wins', 'losses', 'draws'])
+    _recalculate_fight_counters(bird)
 
     return JsonResponse({
         'status': 'success',
@@ -393,14 +487,14 @@ def weight_log_save_ajax(request):
     log.bird = bird
     log.save()
 
-    # Update latest bird weight
-    bird.weight_grams = log.weight_grams
-    bird.save(update_fields=['weight_grams'])
+    # The bird's headline weight should always come from the newest log, even
+    # when this submission is backdated.
+    current_weight = _sync_latest_weight(bird)
 
     return JsonResponse({
         'status': 'success',
         'message': f'Logged {log.weight_grams}g on {log.date}.',
-        'weight_grams': log.weight_grams,
+        'weight_grams': current_weight,
     })
 
 
@@ -408,12 +502,58 @@ def weight_log_save_ajax(request):
 @require_POST
 @_json_not_found
 def weight_log_delete_ajax(request, pk):
-    """Delete a weight log."""
+    """Delete a weight log and re-sync the bird's latest weight."""
     log = WeightLog.objects.filter(pk=pk, bird__user=request.user).first()
     if log is None:
         raise Http404('Weight log not found.')
+    bird = log.bird
     log.delete()
-    return JsonResponse({'status': 'success', 'message': 'Weight log deleted.'})
+    current_weight = _sync_latest_weight(bird)
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Weight log deleted.',
+        'weight_grams': current_weight,
+    })
+
+
+@login_required(login_url='login')
+@require_POST
+@_json_not_found
+def conditioning_save_ajax(request):
+    """Apply the conditioning requirements to an existing bird."""
+    bird_id = (request.POST.get('bird_id') or '').strip()
+    if not bird_id:
+        return JsonResponse({'error': 'Please select a bird.'}, status=400)
+    bird = scoped_flock_member(request.user, bird_id)
+
+    form = ConditioningForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse(
+            {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
+            status=400,
+        )
+
+    bird.conditioning_start_date = form.cleaned_data['conditioning_start_date']
+    bird.target_weight_grams = form.cleaned_data['target_weight_grams']
+    bird.conditioning_program = form.cleaned_data['conditioning_program']
+    bird.conditioning_feed_plan = form.cleaned_data['conditioning_feed_plan']
+    update_fields = [
+        'conditioning_start_date', 'target_weight_grams',
+        'conditioning_program', 'conditioning_feed_plan', 'status',
+    ]
+
+    weight = form.cleaned_data.get('weight_grams')
+    if weight is not None:
+        bird.weight_grams = weight
+        update_fields.append('weight_grams')
+
+    bird.status = 'Conditioning'
+    bird.save(update_fields=update_fields)
+
+    return JsonResponse({
+        'status': 'success',
+        'message': f'{bird.tag_number} is now in conditioning.',
+    })
 
 
 # --- BREEDING & CLUTCH VIEWS ---
@@ -422,9 +562,9 @@ def weight_log_delete_ajax(request, pk):
 def breeding_list_page(request):
     """Render breeding pens and clutch hatch tracking."""
     pens = BreedingPen.objects.filter(user=request.user).select_related('sire', 'dam').prefetch_related('clutches')
-    members = scoped_flock_members(request.user)
-    cocks = members.filter(gender__in=['Cock', 'Stag'])
-    hens = members.filter(gender__in=['Hen', 'Pullet'])
+    members = scoped_flock_members(request.user).select_related('breed')
+    cocks = members.filter(gender__in=['Cock', 'Stag']).order_by('tag_number')
+    hens = members.filter(gender__in=['Hen', 'Pullet']).order_by('tag_number')
 
     return render(request, 'info/breeding_list.html', {
         'pens': pens,
@@ -445,7 +585,7 @@ def breeding_pen_save_ajax(request):
     else:
         pen = BreedingPen(user=request.user)
 
-    form = BreedingPenForm(request.POST, instance=pen)
+    form = BreedingPenForm(request.POST, instance=pen, user=request.user)
     if not form.is_valid():
         return JsonResponse(
             {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
@@ -633,6 +773,7 @@ def health_list_page(request):
         'records': page,
         'birds': scoped_flock_members(request.user).order_by('tag_number'),
         'record_types': HealthRecord.RECORD_TYPES,
+        'medicine_options': _health_medicine_options(request.user),
         'query': query,
         'state': state,
         'record_type': record_type,
@@ -739,6 +880,8 @@ def medicine_list_page(request):
     return render(request, 'info/medicine_list.html', {
         'medicines': page,
         'categories': Medicine.CATEGORY_CHOICES,
+        'medicine_suggestions': COMMON_MEDICINES,
+        'unit_suggestions': MEDICINE_UNITS,
         'query': query,
         'state': state,
         'category': category,
@@ -823,10 +966,22 @@ def medicine_restock_ajax(request):
     except (InvalidOperation, TypeError, ValueError):
         return JsonResponse({'error': 'Enter a valid restock amount.'}, status=400)
 
+    if not amount.is_finite():
+        return JsonResponse({'error': 'Enter a valid restock amount.'}, status=400)
+
+    try:
+        amount = amount.quantize(Decimal('0.01'))
+    except InvalidOperation:
+        return JsonResponse({'error': 'Enter a valid restock amount.'}, status=400)
+
     if amount <= 0:
         return JsonResponse({'error': 'Restock amount must be greater than zero.'}, status=400)
 
-    medicine.stock_quantity = (medicine.stock_quantity or 0) + amount
+    new_stock = (medicine.stock_quantity or 0) + amount
+    if new_stock > Decimal('99999999.99'):
+        return JsonResponse({'error': 'That restock would exceed the maximum stock quantity.'}, status=400)
+
+    medicine.stock_quantity = new_stock
     medicine.save(update_fields=['stock_quantity'])
 
     return JsonResponse({
@@ -1006,83 +1161,119 @@ def import_flock_csv(request):
         messages.error(request, 'Please select a CSV file to upload.')
         return redirect('info:info_list')
 
-    if not csv_file.name.endswith('.csv'):
+    if not csv_file.name.lower().endswith('.csv'):
         messages.error(request, 'Invalid file format. Please upload a .csv file.')
         return redirect('info:info_list')
 
     try:
         decoded = csv_file.read().decode('utf-8-sig')
-    except Exception:
+    except (UnicodeDecodeError, AttributeError):
         messages.error(request, 'Could not read CSV file. Please ensure it is saved in UTF-8 format.')
         return redirect('info:info_list')
 
     reader = csv.DictReader(io.StringIO(decoded))
+    if not reader.fieldnames:
+        messages.error(request, 'The CSV file appears to be empty.')
+        return redirect('info:info_list')
+
     imported_count = 0
     updated_count = 0
     row_errors = []
 
-    with transaction.atomic():
-        for row_idx, row in enumerate(reader, start=2):
-            tag = (row.get('Tag Number') or row.get('tag_number') or '').strip()
-            if not tag:
-                continue
+    for row_idx, row in enumerate(reader, start=2):
+        try:
+            with transaction.atomic():
+                tag = (row.get('Tag Number') or row.get('tag_number') or '').strip()
+                if not tag:
+                    continue
+                if len(tag) > 50:
+                    raise ValueError('tag number is longer than 50 characters')
 
-            gender = (row.get('Gender') or row.get('gender') or 'Cock').strip().capitalize()
-            if gender not in ['Stag', 'Cock', 'Pullet', 'Hen']:
-                gender = 'Cock'
+                gender = (row.get('Gender') or row.get('gender') or 'Cock').strip().capitalize()
+                if gender not in ['Stag', 'Cock', 'Pullet', 'Hen']:
+                    gender = 'Cock'
 
-            status = (row.get('Status') or row.get('status') or 'Active').strip().capitalize()
-            if status not in ['Active', 'Conditioning', 'Broodcock', 'Broodhen', 'Retired']:
-                status = 'Active'
+                status = (row.get('Status') or row.get('status') or 'Active').strip().capitalize()
+                if status not in ['Active', 'Conditioning', 'Broodcock', 'Broodhen', 'Retired']:
+                    status = 'Active'
 
-            breed_name = (row.get('Breed') or row.get('breed') or '').strip()
-            breed = None
-            if breed_name:
-                breed, _ = Breed.objects.get_or_create(name=breed_name)
+                breed_name = (row.get('Breed') or row.get('breed') or '').strip()
+                breed = None
+                if breed_name:
+                    breed = Breed.objects.filter(name__iexact=breed_name).first()
+                    if breed is None:
+                        breed = Breed.objects.create(name=breed_name[:100])
 
-            comb_type = (row.get('Comb Type') or row.get('comb_type') or 'Pea').strip()
-            leg_color = (row.get('Leg Color') or row.get('leg_color') or 'Yellow').strip()
-            color = (row.get('Color') or row.get('color') or '').strip()
-            cage_number = (row.get('Cage Number') or row.get('cage_number') or '').strip()
-            sire = (row.get('Sire') or row.get('sire') or '').strip()
-            dam = (row.get('Dam') or row.get('dam') or '').strip()
+                comb_type = _choice_value(
+                    row.get('Comb Type') or row.get('comb_type'),
+                    FlockMember.COMB_CHOICES,
+                    'Pea',
+                )
+                leg_color = _choice_value(
+                    row.get('Leg Color') or row.get('leg_color'),
+                    FlockMember.LEG_COLOR_CHOICES,
+                    'Yellow',
+                )
 
-            def _clean_int(val, default=0):
-                try:
-                    return max(0, int(val or default))
-                except (ValueError, TypeError):
-                    return default
-
-            weight_grams = _clean_int(row.get('Weight (g)') or row.get('weight_grams'), None)
-            wins = _clean_int(row.get('Wins') or row.get('wins'), 0)
-            losses = _clean_int(row.get('Losses') or row.get('losses'), 0)
-            draws = _clean_int(row.get('Draws') or row.get('draws'), 0)
-
-            bird, created = FlockMember.objects.update_or_create(
-                user=request.user,
-                tag_number=tag,
-                defaults={
+                defaults = {
                     'breed': breed,
                     'gender': gender,
                     'status': status,
                     'comb_type': comb_type,
                     'leg_color': leg_color,
-                    'color': color,
-                    'cage_number': cage_number,
-                    'sire': sire,
-                    'dam': dam,
-                    'weight_grams': weight_grams,
-                    'wins': wins,
-                    'losses': losses,
-                    'draws': draws,
+                    'color': (row.get('Color') or row.get('color') or '').strip()[:100],
+                    'cage_number': (row.get('Cage Number') or row.get('cage_number') or '').strip()[:50],
+                    'sire': (row.get('Sire') or row.get('sire') or '').strip()[:50],
+                    'dam': (row.get('Dam') or row.get('dam') or '').strip()[:50],
+                    'wins': _clean_int(row.get('Wins') or row.get('wins'), 0),
+                    'losses': _clean_int(row.get('Losses') or row.get('losses'), 0),
+                    'draws': _clean_int(row.get('Draws') or row.get('draws'), 0),
                 }
-            )
-            if created:
-                imported_count += 1
-            else:
-                updated_count += 1
 
-    messages.success(request, f'CSV Import complete: {imported_count} new birds added, {updated_count} existing birds updated.')
+                # Blank optional cells leave the existing value untouched.
+                birth_raw = (row.get('Birth Date') or row.get('birth_date') or '').strip()
+                if birth_raw:
+                    birth_date = parse_date(birth_raw)
+                    if birth_date is None:
+                        raise ValueError(f'invalid birth date "{birth_raw}" (use YYYY-MM-DD)')
+                    defaults['birth_date'] = birth_date
+
+                weight_raw = (row.get('Weight (g)') or row.get('weight_grams') or '').strip()
+                if weight_raw:
+                    weight_grams = _clean_int(weight_raw, None)
+                    if weight_grams is None:
+                        raise ValueError(f'invalid weight "{weight_raw}"')
+                    defaults['weight_grams'] = weight_grams
+
+                # Match existing tags case-insensitively to mirror the form's
+                # uniqueness rule and avoid duplicate "Blue"/"blue" birds.
+                bird = FlockMember.objects.filter(
+                    user=request.user, tag_number__iexact=tag
+                ).first()
+                if bird is None:
+                    FlockMember.objects.create(user=request.user, tag_number=tag, **defaults)
+                    imported_count += 1
+                else:
+                    for field, value in defaults.items():
+                        setattr(bird, field, value)
+                    bird.save(update_fields=list(defaults))
+                    updated_count += 1
+        except Exception as exc:  # keep importing the remaining rows
+            row_errors.append(f'Row {row_idx}: {exc}')
+
+    if imported_count or updated_count:
+        messages.success(
+            request,
+            f'CSV Import complete: {imported_count} new birds added, '
+            f'{updated_count} existing birds updated.'
+        )
+    if row_errors:
+        preview = '; '.join(row_errors[:3])
+        more = f' (+{len(row_errors) - 3} more)' if len(row_errors) > 3 else ''
+        messages.warning(request, f'{len(row_errors)} row(s) could not be imported — {preview}{more}')
+    if not imported_count and not updated_count and not row_errors:
+        messages.info(request, 'The CSV file did not contain any flock members.')
+
     return redirect('info:info_list')
 
 
@@ -1109,27 +1300,19 @@ def flock_batch_action_ajax(request):
         return JsonResponse({'status': 'success', 'message': f'Updated {count} birds to "{new_status}".'})
 
     elif action == 'batch_health':
-        record_type = request.POST.get('record_type', '').strip()
-        title = request.POST.get('title', '').strip()
-        date_administered = request.POST.get('date_administered', '').strip()
-        next_due_date = request.POST.get('next_due_date', '').strip() or None
-        notes = request.POST.get('notes', '').strip()
+        form = HealthRecordForm(request.POST)
+        if not form.is_valid():
+            return JsonResponse({'error': _form_error_message(form)}, status=400)
 
-        if not title or not date_administered:
-            return JsonResponse({'error': 'Title and administration date are required.'}, status=400)
-
+        cleaned_data = form.cleaned_data
         records_to_create = [
-            HealthRecord(
-                bird=b,
-                record_type=record_type,
-                title=title,
-                date_administered=date_administered,
-                next_due_date=next_due_date,
-                notes=notes
-            ) for b in birds
+            HealthRecord(bird=b, **cleaned_data) for b in birds
         ]
         HealthRecord.objects.bulk_create(records_to_create)
-        return JsonResponse({'status': 'success', 'message': f'Logged "{title}" for {count} birds.'})
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Logged "{cleaned_data["title"]}" for {count} birds.',
+        })
 
     elif action == 'delete':
         birds.delete()

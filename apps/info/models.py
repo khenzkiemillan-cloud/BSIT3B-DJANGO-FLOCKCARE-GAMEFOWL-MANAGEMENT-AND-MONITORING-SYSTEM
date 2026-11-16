@@ -67,6 +67,12 @@ class FlockMember(models.Model):
     wins = models.PositiveIntegerField(default=0, blank=True)
     losses = models.PositiveIntegerField(default=0, blank=True)
     draws = models.PositiveIntegerField(default=0, blank=True)
+
+    # Conditioning requirements
+    conditioning_start_date = models.DateField(null=True, blank=True, help_text="Date the bird entered conditioning")
+    target_weight_grams = models.PositiveIntegerField(null=True, blank=True, help_text="Target fight weight in grams")
+    conditioning_program = models.CharField(max_length=100, blank=True, help_text="Conditioning regimen (e.g. Roadwork, Sparring)")
+    conditioning_feed_plan = models.CharField(max_length=255, blank=True, help_text="Feed / diet plan during conditioning")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -218,6 +224,34 @@ class BreedingPen(models.Model):
 
     def __str__(self):
         return f"Pen {self.pen_number}: {self.sire.tag_number} x {self.dam.tag_number}"
+
+    @property
+    def total_clutches(self):
+        return len(self.clutches.all())
+
+    @property
+    def total_eggs(self):
+        return sum(clutch.eggs_collected for clutch in self.clutches.all())
+
+    @property
+    def total_fertile_eggs(self):
+        return sum(clutch.fertile_eggs for clutch in self.clutches.all())
+
+    @property
+    def total_hatched(self):
+        return sum(clutch.hatched_count for clutch in self.clutches.all())
+
+    @property
+    def fertility_rate(self):
+        if self.total_eggs:
+            return round((self.total_fertile_eggs / self.total_eggs) * 100, 1)
+        return 0.0
+
+    @property
+    def hatchability_rate(self):
+        if self.total_fertile_eggs:
+            return round((self.total_hatched / self.total_fertile_eggs) * 100, 1)
+        return 0.0
 
 
 class ClutchRecord(models.Model):

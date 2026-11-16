@@ -1,0 +1,183 @@
+<div class="card mb-3 dh-inline-form" id="quickMemberCard">
+  <div class="card-header d-flex flex-wrap align-items-center gap-2">
+    <div>
+      <div class="card-title mb-0">
+        <i class="fas fa-plus-circle text-primary" aria-hidden="true"></i>
+        Add a flock member
+      </div>
+      <div class="text-muted small">
+        Enter the basic flock details below. Conditioning requirements are handled separately.
+      </div>
+    </div>
+    <span class="badge bg-primary-lt text-primary ms-auto">Quick add</span>
+  </div>
+  <form id="quickMemberForm" novalidate>
+    {% csrf_token %}
+    <div class="card-body">
+      <div class="dh-form-requirements mb-3">
+        <span class="dh-req-title">Flock requirements</span>
+        <ul>
+          <li><span class="text-danger">*</span> Tag / band number</li>
+          <li><span class="text-danger">*</span> Gender</li>
+          <li><span class="text-danger">*</span> Status</li>
+          <li>Breed / bloodline (or add a new one)</li>
+          <li>Hatch date, weight and cage (optional)</li>
+        </ul>
+      </div>
+      <p class="text-muted small mb-3">
+        <i class="fas fa-circle-info me-1" aria-hidden="true"></i>
+        To place a bird in <strong>Conditioning</strong>, use the Conditioning page or the full form so you can provide the separate conditioning requirements (start date, target weight, program, and feed plan).
+      </p>
+      <div class="row g-3">
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label required" for="quick_member_tag">Tag / Band number</label>
+          <input type="text" name="tag_number" id="quick_member_tag" class="form-control"
+                 maxlength="50" placeholder="e.g. K-101" required>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label required" for="quick_member_gender">Gender</label>
+          <select name="gender" id="quick_member_gender" class="form-select" required>
+            <option value="">Select gender</option>
+            <option value="Stag">Stag</option>
+            <option value="Cock">Cock</option>
+            <option value="Pullet">Pullet</option>
+            <option value="Hen">Hen</option>
+          </select>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label required" for="quick_member_status">Status</label>
+          <select name="status" id="quick_member_status" class="form-select" required>
+            <option value="Active">Active</option>
+            <option value="Broodcock">Broodcock</option>
+            <option value="Broodhen">Broodhen</option>
+            <option value="Retired">Retired</option>
+          </select>
+          <small class="form-hint">Conditioning is set separately with its own requirements.</small>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label" for="quick_member_breed">Breed / Bloodline</label>
+          <select name="breed" id="quick_member_breed" class="form-select">
+            <option value="">— Select breed —</option>
+            {% for breed in breeds %}
+              <option value="{{ breed.id }}">{{ breed.name }}</option>
+            {% endfor %}
+            <option value="__new__">+ Add a new breed…</option>
+          </select>
+        </div>
+        <div class="col-sm-6 col-lg-3 d-none" id="quickNewBreedWrap">
+          <label class="form-label" for="quick_member_new_breed">New breed name</label>
+          <input type="text" name="new_breed" id="quick_member_new_breed" class="form-control"
+                 maxlength="100" list="quickBreedSuggestions" placeholder="e.g. Sweater">
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label" for="quick_member_birth">Hatch date</label>
+          <input type="date" name="birth_date" id="quick_member_birth" class="form-control">
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label" for="quick_member_weight">Weight (grams)</label>
+          <input type="number" name="weight_grams" id="quick_member_weight" class="form-control"
+                 min="0" step="1" placeholder="e.g. 2100">
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label" for="quick_member_cage">Cage / Pen / Cord #</label>
+          <input type="text" name="cage_number" id="quick_member_cage" class="form-control"
+                 maxlength="50" placeholder="e.g. Cord 12 or Pen B-4">
+        </div>
+      </div>
+      <datalist id="quickBreedSuggestions">
+        {% for breed_name in common_breeds %}
+          <option value="{{ breed_name }}"></option>
+        {% endfor %}
+      </datalist>
+      <div id="quickMemberError" class="alert alert-danger d-none mt-3 mb-0" role="alert"></div>
+    </div>
+    <div class="card-footer d-flex flex-wrap justify-content-end gap-2">
+      {% if show_full_form %}
+        <button type="button" class="btn btn-outline-secondary"
+                data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="create">
+          <i class="fas fa-list-check me-2"></i>Open full form
+        </button>
+      {% else %}
+        <a href="{% url 'info:info_list' %}" class="btn btn-outline-secondary">
+          <i class="fas fa-dove me-2"></i>Open flock page
+        </a>
+      {% endif %}
+      <button type="submit" class="btn btn-primary" id="quickMemberSubmit">
+        <i class="fas fa-plus-circle me-2"></i>Add to flock
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function () {
+  const form = document.getElementById('quickMemberForm');
+  if (!form) return;
+
+  const errorBox = document.getElementById('quickMemberError');
+  const breedSelect = document.getElementById('quick_member_breed');
+  const newBreedWrap = document.getElementById('quickNewBreedWrap');
+  const newBreedInput = document.getElementById('quick_member_new_breed');
+  const submitBtn = document.getElementById('quickMemberSubmit');
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.classList.remove('d-none');
+  }
+
+  function clearError() {
+    errorBox.textContent = '';
+    errorBox.classList.add('d-none');
+  }
+
+  function toggleNewBreed() {
+    const isNew = breedSelect.value === '__new__';
+    newBreedWrap.classList.toggle('d-none', !isNew);
+    newBreedInput.required = isNew;
+    if (!isNew) newBreedInput.value = '';
+  }
+
+  breedSelect.addEventListener('change', toggleNewBreed);
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    clearError();
+
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    const formData = new FormData(form);
+    if (breedSelect.value === '__new__') {
+      formData.set('breed', '');
+    }
+
+    submitBtn.disabled = true;
+
+    fetch("{% url 'info:info_save_ajax' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') },
+      body: formData,
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not add the flock member.');
+        return data;
+      })
+      .then(function () {
+        if (typeof window.refreshMainContent === 'function') {
+          window.refreshMainContent();
+        } else {
+          window.location.reload();
+        }
+      })
+      .catch(function (error) {
+        showError(error.message);
+      })
+      .finally(function () {
+        submitBtn.disabled = false;
+      });
+  });
+})();
+</script>

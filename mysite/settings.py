@@ -17,6 +17,17 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load environment variables from a local .env file when python-dotenv is
+# available. On servers the values can also be supplied by the process
+# environment (Docker, systemd, Passenger, etc.).
+try:
+    from dotenv import load_dotenv
+except ImportError:  # python-dotenv is optional
+    load_dotenv = None
+
+if load_dotenv is not None:
+    load_dotenv(BASE_DIR / '.env')
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -28,6 +39,13 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-zsnno#^l!whuzs%55j6*366px#
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '*').split(',') if h.strip()]
+
+# Comma-separated list of trusted origins for CSRF (needed behind HTTPS/proxies).
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+]
 
 
 # Application definition
@@ -54,6 +72,16 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Serve collected static files directly from the app server (Gunicorn,
+# Passenger, etc.) when WhiteNoise is installed. This avoids needing a
+# separate web-server static configuration on shared hosting.
+try:
+    import whitenoise  # noqa: F401
+
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+except ImportError:  # WhiteNoise is optional
+    pass
 
 ROOT_URLCONF = 'mysite.urls'
 
@@ -136,7 +164,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# The app is used by Philippine breeders; default to Manila time so "today"
+# matches the breeder's calendar. Override with the TIME_ZONE env var.
+TIME_ZONE = os.getenv('TIME_ZONE', 'Asia/Manila')
 
 USE_I18N = True
 
@@ -159,3 +189,17 @@ LOGOUT_REDIRECT_URL = '/'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# ---------------------------------------------------------------------------
+# Production security (opt-in, so plain-HTTP servers keep working)
+# ---------------------------------------------------------------------------
+if not DEBUG:
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SESSION_COOKIE_HTTPONLY = True
+    X_FRAME_OPTIONS = 'DENY'
+
+    if os.getenv('USE_HTTPS', 'False').lower() in ('true', '1', 'yes'):
+        SECURE_SSL_REDIRECT = True
+        SESSION_COOKIE_SECURE = True
+        CSRF_COOKIE_SECURE = True
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
