@@ -2,32 +2,17 @@
 {% block content %}
 
   <div class="page-header d-print-none mb-4" aria-label="Page header">
-    <div class="row align-items-center">
-      <div class="col">
-        <nav aria-label="Breadcrumb">
-          <ol class="dh-breadcrumb">
-            <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
-            <li class="is-current">Health</li>
-          </ol>
-        </nav>
-        <div class="page-pretitle">Health &amp; care</div>
-        <h2 class="page-title mb-0">Health records</h2>
-        <p class="dh-page-subtitle">
-          Log vaccinations, deworming, vitamins and treatments, then keep every follow-up on schedule.
-        </p>
-      </div>
-      <div class="col-12 col-md-auto">
-        <div class="btn-list">
-          <button type="button"
-                  class="btn btn-primary"
-                  data-bs-toggle="modal"
-                  data-bs-target="#healthRecordModal"
-                  data-mode="create">
-            <i class="fas fa-notes-medical me-2"></i>Add health record
-          </button>
-        </div>
-      </div>
-    </div>
+    <nav aria-label="Breadcrumb">
+      <ol class="dh-breadcrumb">
+        <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
+        <li class="is-current">Health</li>
+      </ol>
+    </nav>
+    <div class="page-pretitle">Health &amp; care</div>
+    <h2 class="page-title mb-0">Health records</h2>
+    <p class="dh-page-subtitle">
+      Log vaccinations, deworming, vitamins and treatments, then keep every follow-up on schedule.
+    </p>
   </div>
 
   <div class="dh-mini-stats">

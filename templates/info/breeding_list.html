@@ -2,29 +2,17 @@
 {% block content %}
 
   <div class="page-header d-print-none mb-4" aria-label="Page header">
-    <div class="row align-items-center">
-      <div class="col">
-        <nav aria-label="Breadcrumb">
-          <ol class="dh-breadcrumb">
-            <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
-            <li class="is-current">Breeding Pens &amp; Hatching</li>
-          </ol>
-        </nav>
-        <div class="page-pretitle">Bloodline multiplication</div>
-        <h2 class="page-title mb-0">Breeding Pens &amp; Hatchery</h2>
-        <p class="dh-page-subtitle">
-          Manage broodcock and broodhen pairings, track egg clutches, and monitor fertility and hatchability rates.
-        </p>
-      </div>
-      <div class="col-12 col-md-auto">
-        <button type="button"
-                class="btn btn-primary"
-                data-bs-toggle="modal"
-                data-bs-target="#penModal">
-          <i class="fas fa-plus-circle me-2"></i>New Breeding Pen
-        </button>
-      </div>
-    </div>
+    <nav aria-label="Breadcrumb">
+      <ol class="dh-breadcrumb">
+        <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
+        <li class="is-current">Breeding Pens &amp; Hatching</li>
+      </ol>
+    </nav>
+    <div class="page-pretitle">Bloodline multiplication</div>
+    <h2 class="page-title mb-0">Breeding Pens &amp; Hatchery</h2>
+    <p class="dh-page-subtitle">
+      Manage broodcock and broodhen pairings, track egg clutches, and monitor fertility and hatchability rates.
+    </p>
   </div>
 
   <div class="card mb-3 dh-inline-form" id="quickPenCard">

@@ -13,8 +13,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from apps.core.scoping import scoped_flock_members
-from apps.info.choices import COMMON_BREEDS
-from apps.info.models import Breed, FinancialEntry, HealthRecord, Medicine
+from apps.info.models import FinancialEntry, HealthRecord, Medicine
 
 User = get_user_model()
 MAX_FAILED_ATTEMPTS = 5
@@ -253,8 +252,6 @@ def home(request):
         'overdue_records': overdue_records,
         'overdue_count': overdue_qs.count(),
         'medicine_alert_count': medicine_alert_count,
-        'breeds': Breed.objects.all(),
-        'common_breeds': COMMON_BREEDS,
         'today': today,
     }
     return render(request, 'home.html', context)

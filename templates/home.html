@@ -32,8 +32,6 @@
 
   <div class="dh-dashboard-stack">
 
-    {% include "info/partials/quick_member_form.html" %}
-
   {% if medicine_alert_count %}
   <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2" role="alert">
     <i class="fas fa-prescription-bottle-medical" aria-hidden="true"></i>
@@ -177,12 +175,7 @@
                   <div class="empty py-4">
                     <div class="empty-icon"><i class="fas fa-dove"></i></div>
                     <p class="empty-title">No flock members yet</p>
-                    <p class="empty-subtitle">Add your first bird to start tracking your flock.</p>
-                    <div class="empty-action">
-                      <a href="{% url 'info:info_list' %}" class="btn btn-primary">
-                        <i class="fas fa-plus-circle me-2"></i>Add flock member
-                      </a>
-                    </div>
+                    <p class="empty-subtitle">Birds you add from the Flock page will appear here.</p>
                   </div>
                 </td>
               </tr>

@@ -949,9 +949,10 @@ class InlineQuickFormRenderTests(FlockTestCase):
         self.assertContains(response, 'id="quickConditioningForm"')
         self.assertNotContains(response, 'id="quickMemberForm"')
 
-    def test_dashboard_renders_quick_member_form(self):
+    def test_dashboard_does_not_render_quick_member_form(self):
         response = self.client.get(reverse('dashboard'))
-        self.assertContains(response, 'id="quickMemberForm"')
+        self.assertNotContains(response, 'id="quickMemberForm"')
+        self.assertNotContains(response, 'Add flock member')
 
     def test_breeding_page_renders_quick_pen_form(self):
         response = self.client.get(reverse('info:breeding_list'))
