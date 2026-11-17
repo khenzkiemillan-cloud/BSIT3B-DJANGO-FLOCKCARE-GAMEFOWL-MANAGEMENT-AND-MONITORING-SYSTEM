@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 
 class Breed(models.Model):
@@ -46,6 +49,13 @@ class FlockMember(models.Model):
         ('Other', 'Other'),
     ]
 
+    CONDITIONING_PHASES = [
+        ('foundation', 'Foundation / Rest'),
+        ('workout', 'Roadwork & Exercise'),
+        ('sparring', 'Sparring / Live Work'),
+        ('peak', 'Peak / Fight Prep'),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='flock_members')
     tag_number = models.CharField(max_length=50)
     breed = models.ForeignKey(Breed, on_delete=models.SET_NULL, null=True, blank=True, related_name='birds')
@@ -73,6 +83,14 @@ class FlockMember(models.Model):
     target_weight_grams = models.PositiveIntegerField(null=True, blank=True, help_text="Target fight weight in grams")
     conditioning_program = models.CharField(max_length=100, blank=True, help_text="Conditioning regimen (e.g. Roadwork, Sparring)")
     conditioning_feed_plan = models.CharField(max_length=255, blank=True, help_text="Feed / diet plan during conditioning")
+    conditioning_phase = models.CharField(
+        max_length=20, choices=CONDITIONING_PHASES, default='foundation', blank=True,
+        help_text="Current phase of the conditioning program",
+    )
+    conditioning_target_date = models.DateField(
+        null=True, blank=True, help_text="Target derby or fight date"
+    )
+    conditioning_notes = models.TextField(blank=True, help_text="Notes for the current conditioning program")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -97,6 +115,106 @@ class FlockMember(models.Model):
         if self.total_fights:
             return round((self.wins / self.total_fights) * 100)
         return 0
+
+    @property
+    def conditioning_days(self):
+        """Number of days since the bird entered conditioning."""
+        if not self.conditioning_start_date:
+            return 0
+        return max((timezone.localdate() - self.conditioning_start_date).days, 0)
+
+    @property
+    def weight_to_target(self):
+        """Grams still needed to reach the target weight (negative if over)."""
+        if self.weight_grams is None or self.target_weight_grams is None:
+            return None
+        return self.target_weight_grams - self.weight_grams
+
+    @property
+    def conditioning_baseline_weight(self):
+        """First weight recorded since conditioning started."""
+        if not self.pk:
+            return self.weight_grams
+        logs = self.weight_logs.all()
+        if self.conditioning_start_date:
+            logs = logs.filter(date__gte=self.conditioning_start_date)
+        first_log = logs.order_by('date', 'created_at').first()
+        return first_log.weight_grams if first_log else self.weight_grams
+
+    @property
+    def conditioning_progress_pct(self):
+        """Percent of the weight gap closed since the conditioning baseline."""
+        baseline = self.conditioning_baseline_weight
+        target = self.target_weight_grams
+        current = self.weight_grams
+        if baseline is None or target is None or current is None:
+            return None
+        if baseline == target:
+            return 100 if current == target else 0
+        progress = (current - baseline) / (target - baseline) * 100
+        return max(0, min(100, round(progress)))
+
+
+class ConditioningSession(models.Model):
+    """One scheduled workout, rest day, or checkpoint in a conditioning plan."""
+
+    PHASE_CHOICES = FlockMember.CONDITIONING_PHASES
+    SESSION_TYPES = [
+        ('weigh_in', 'Weigh-in'),
+        ('roadwork', 'Roadwork'),
+        ('sparring', 'Sparring'),
+        ('feed_control', 'Feed control'),
+        ('free_range', 'Free range'),
+        ('cage_rest', 'Cage rest'),
+        ('water_work', 'Water work'),
+        ('other', 'Other'),
+    ]
+    STATUS_CHOICES = [
+        ('planned', 'Planned'),
+        ('completed', 'Completed'),
+        ('skipped', 'Skipped'),
+    ]
+
+    bird = models.ForeignKey(
+        FlockMember, on_delete=models.CASCADE, related_name='conditioning_sessions'
+    )
+    phase = models.CharField(max_length=20, choices=PHASE_CHOICES, default='foundation')
+    session_type = models.CharField(max_length=20, choices=SESSION_TYPES, default='weigh_in')
+    title = models.CharField(max_length=120)
+    scheduled_date = models.DateField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='planned')
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['scheduled_date', 'created_at']
+        indexes = [
+            models.Index(fields=['bird', 'scheduled_date']),
+            models.Index(fields=['bird', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.bird.tag_number} - {self.title} ({self.scheduled_date})"
+
+    @property
+    def is_overdue(self):
+        return self.status == 'planned' and self.scheduled_date < timezone.localdate()
+
+
+def conditioning_session_counts(user, today=None):
+    """Return planned conditioning session counts for one user's flock."""
+    today = today or timezone.localdate()
+    planned = ConditioningSession.objects.filter(bird__user=user, status='planned')
+    return {
+        'overdue': planned.filter(scheduled_date__lt=today).count(),
+        'due_today': planned.filter(scheduled_date=today).count(),
+        'upcoming': planned.filter(
+            scheduled_date__gt=today,
+            scheduled_date__lte=today + timedelta(days=7),
+        ).count(),
+    }
 
 
 class Medicine(models.Model):

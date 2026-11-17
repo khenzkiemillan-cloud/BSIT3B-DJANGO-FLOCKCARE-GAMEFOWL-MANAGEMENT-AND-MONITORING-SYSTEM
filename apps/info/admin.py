@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import Breed, FlockMember, HealthRecord, Medicine, FightRecord, WeightLog, BreedingPen, ClutchRecord
+from .models import (
+    Breed, FlockMember, HealthRecord, Medicine, FightRecord, WeightLog,
+    BreedingPen, ClutchRecord, ConditioningSession,
+)
 
 
 @admin.register(Breed)
@@ -41,6 +44,13 @@ class WeightLogAdmin(admin.ModelAdmin):
     list_display = ('bird', 'date', 'time_of_day', 'weight_grams')
     list_filter = ('time_of_day', 'date')
     search_fields = ('bird__tag_number',)
+
+
+@admin.register(ConditioningSession)
+class ConditioningSessionAdmin(admin.ModelAdmin):
+    list_display = ('bird', 'title', 'phase', 'session_type', 'scheduled_date', 'status')
+    list_filter = ('phase', 'session_type', 'status', 'scheduled_date')
+    search_fields = ('bird__tag_number', 'title', 'notes')
 
 
 @admin.register(BreedingPen)

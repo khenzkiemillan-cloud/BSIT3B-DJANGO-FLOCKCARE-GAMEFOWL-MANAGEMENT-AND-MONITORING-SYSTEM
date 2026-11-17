@@ -53,7 +53,7 @@
         {% endif %}
 
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.app_name == 'info' and request.resolver_match.url_name != 'health_list' and request.resolver_match.url_name != 'medicine_list' and request.resolver_match.url_name != 'breeding_list' and request.GET.status != 'Conditioning' %}active{% endif %}" href="{% url 'info:info_list' %}" data-turbo-frame="main-content">
+          <a class="nav-link {% if request.resolver_match.app_name == 'info' and request.resolver_match.url_name != 'health_list' and request.resolver_match.url_name != 'medicine_list' and request.resolver_match.url_name != 'breeding_list' and request.resolver_match.url_name != 'conditioning_list' and request.GET.status != 'Conditioning' %}active{% endif %}" href="{% url 'info:info_list' %}" data-turbo-frame="main-content">
             <span class="nav-link-icon">
               <i class="fa-solid fa-feather-pointed"></i>
             </span>
@@ -62,7 +62,7 @@
         </li>
 
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.app_name == 'info' and request.resolver_match.url_name != 'health_list' and request.resolver_match.url_name != 'medicine_list' and request.resolver_match.url_name != 'breeding_list' and request.GET.status == 'Conditioning' %}active{% endif %}" href="{% url 'info:info_list' %}?status=Conditioning" data-turbo-frame="main-content">
+          <a class="nav-link {% if request.resolver_match.url_name == 'conditioning_list' %}active{% endif %}" href="{% url 'info:conditioning_list' %}" data-turbo-frame="main-content">
             <span class="nav-link-icon">
               <i class="fa-solid fa-dumbbell"></i>
             </span>

@@ -91,10 +91,9 @@
         const links = Array.from(document.querySelectorAll(".dh-sidebar .nav-link"));
 
         // Some menu entries share the same path but differ by query string
-        // (for example "Flock" -> /info/ and "Conditioning" ->
-        // /info/?status=Conditioning). A filtered link counts as a match when
-        // all of its query parameters are present in the current URL, so
-        // extra params such as ?status=Conditioning&q=rooster still match.
+        // (for example the flock list can be filtered with ?status=Conditioning).
+        // A filtered link counts as a match when all of its query parameters
+        // are present in the current URL, so extra params still match.
         function isFilteredMatch(linkUrl) {
           if (!linkUrl.search) return false;
           for (const [key, value] of new URLSearchParams(linkUrl.search)) {

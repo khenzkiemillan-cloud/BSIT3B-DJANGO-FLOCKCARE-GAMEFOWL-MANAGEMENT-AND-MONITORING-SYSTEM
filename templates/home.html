@@ -14,7 +14,7 @@
         </p>
         <div class="dh-hero-stats">
           <span class="dh-hero-stat"><span class="dh-status-dot"></span><strong>{{ active_birds }}</strong> active</span>
-          <span class="dh-hero-stat is-warning"><span class="dh-status-dot"></span><strong>{{ conditioning_birds }}</strong> conditioning</span>
+          <span class="dh-hero-stat is-warning"><span class="dh-status-dot"></span><strong>{{ conditioning_birds }}</strong> conditioning{% if conditioning_overdue_sessions %} • {{ conditioning_overdue_sessions }} session{{ conditioning_overdue_sessions|pluralize }} overdue{% endif %}</span>
           {% if overdue_count %}
           <span class="dh-hero-stat is-danger"><span class="dh-status-dot"></span><strong>{{ overdue_count }}</strong> overdue task{{ overdue_count|pluralize }}</span>
           {% else %}
@@ -79,7 +79,7 @@
       </div>
     </div>
     <div class="col-6 col-lg-3">
-      <a href="{% url 'info:info_list' %}?status=Conditioning"
+      <a href="{% url 'info:conditioning_list' %}"
          class="card stat-card stat-card-warning text-white text-decoration-none h-100"
          title="View birds in conditioning"
          aria-label="View {{ conditioning_birds }} bird{{ conditioning_birds|pluralize }} in conditioning">
@@ -91,6 +91,11 @@
               <div class="dh-stat-meta">
                 <i class="fas fa-dumbbell"></i>
                 {{ conditioning_pct }}% of the flock
+                {% if conditioning_overdue_sessions %}
+                • {{ conditioning_overdue_sessions }} session{{ conditioning_overdue_sessions|pluralize }} overdue
+                {% elif conditioning_due_sessions %}
+                • {{ conditioning_due_sessions }} due today
+                {% endif %}
                 <i class="fas fa-arrow-right ms-1"></i>
               </div>
             </div>

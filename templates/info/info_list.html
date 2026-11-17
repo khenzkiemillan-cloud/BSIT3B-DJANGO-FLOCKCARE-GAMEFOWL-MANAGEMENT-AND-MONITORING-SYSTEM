@@ -72,6 +72,7 @@
               <li><span class="text-danger">*</span> Target / fight weight</li>
               <li><span class="text-danger">*</span> Conditioning program</li>
               <li><span class="text-danger">*</span> Feed / diet plan</li>
+              <li>Target date, starting phase and notes (optional)</li>
               <li>Current weight (optional)</li>
             </ul>
           </div>
@@ -94,6 +95,11 @@
                    class="form-control" value="{% now 'Y-m-d' %}" required>
           </div>
           <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="quick_cond_target_date">Target fight date</label>
+            <input type="date" name="conditioning_target_date" id="quick_cond_target_date"
+                   class="form-control">
+          </div>
+          <div class="col-sm-6 col-lg-3">
             <label class="form-label required" for="quick_cond_target">Target / fight weight (g)</label>
             <input type="number" name="target_weight_grams" id="quick_cond_target"
                    class="form-control" min="1" step="1" placeholder="e.g. 2200" required>
@@ -113,6 +119,14 @@
                    class="form-control" maxlength="100" placeholder="e.g. Beach roadwork">
           </div>
           <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="quick_cond_phase">Starting phase</label>
+            <select name="conditioning_phase" id="quick_cond_phase" class="form-select">
+              {% for value, label in phases %}
+              <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 col-lg-3">
             <label class="form-label required" for="quick_cond_feed">Feed / diet plan</label>
             <input type="text" name="conditioning_feed_plan" id="quick_cond_feed"
                    class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily" required>
@@ -121,6 +135,11 @@
             <label class="form-label" for="quick_cond_weight">Current weight (g)</label>
             <input type="number" name="weight_grams" id="quick_cond_weight"
                    class="form-control" min="0" step="1" placeholder="e.g. 2150">
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="quick_cond_notes">Conditioning notes</label>
+            <textarea name="conditioning_notes" id="quick_cond_notes" class="form-control" rows="2"
+                      maxlength="500" placeholder="e.g. Recovering from mild hoof soreness; keep roadwork light."></textarea>
           </div>
         </div>
         <div id="quickConditioningError" class="alert alert-danger d-none mt-3 mb-0" role="alert"></div>
@@ -299,9 +318,12 @@
                         data-losses="{{ bird.losses }}"
                         data-draws="{{ bird.draws }}"
                         data-conditioning-start="{{ bird.conditioning_start_date|date:'Y-m-d' }}"
+                        data-conditioning-target-date="{{ bird.conditioning_target_date|date:'Y-m-d' }}"
                         data-target-weight="{{ bird.target_weight_grams|default:'' }}"
                         data-conditioning-program="{{ bird.conditioning_program|default:'' }}"
                         data-conditioning-feed="{{ bird.conditioning_feed_plan|default:'' }}"
+                        data-conditioning-phase="{{ bird.conditioning_phase|default:'foundation' }}"
+                        data-conditioning-notes="{{ bird.conditioning_notes|default:'' }}"
                         data-sire="{{ bird.sire|default:'' }}"
                         data-dam="{{ bird.dam|default:'' }}"
                         title="Edit"
@@ -330,6 +352,9 @@
                         data-target-weight="{{ bird.target_weight_grams|default:'' }}"
                         data-conditioning-program="{{ bird.conditioning_program|default:'' }}"
                         data-conditioning-feed="{{ bird.conditioning_feed_plan|default:'' }}"
+                        data-conditioning-target-date="{{ bird.conditioning_target_date|date:'M j, Y' }}"
+                        data-conditioning-phase="{{ bird.get_conditioning_phase_display }}"
+                        data-conditioning-notes="{{ bird.conditioning_notes|default:'' }}"
                         title="Weight / Conditioning logs"
                         aria-label="Weight logs for {{ bird.tag_number }}">
                   <i class="fas fa-scale-balanced text-secondary"></i>
@@ -568,6 +593,11 @@
                     <small class="form-hint">When the bird entered conditioning.</small>
                   </div>
                   <div class="col-md-6">
+                    <label class="form-label">Target fight date</label>
+                    <input type="date" name="conditioning_target_date" id="member_conditioning_target_date" class="form-control">
+                    <small class="form-hint">Optional derby or match date.</small>
+                  </div>
+                  <div class="col-md-6">
                     <label class="form-label" data-conditioning-label>Target / fight weight (grams)</label>
                     <input type="number" name="target_weight_grams" id="member_target_weight" class="form-control" min="1" step="1" placeholder="e.g. 2200">
                   </div>
@@ -578,6 +608,14 @@
                   <div class="col-md-6">
                     <label class="form-label" data-conditioning-label>Feed / diet plan</label>
                     <input type="text" name="conditioning_feed_plan" id="member_conditioning_feed_plan" class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Current phase</label>
+                    <select name="conditioning_phase" id="member_conditioning_phase" class="form-select">
+                      {% for value, label in phases %}
+                      <option value="{{ value }}">{{ label }}</option>
+                      {% endfor %}
+                    </select>
                   </div>
                   <div class="col-md-6">
                     <label class="form-label">Current weight (grams)</label>
@@ -594,6 +632,11 @@
                   <div class="col-md-6">
                     <label class="form-label">Draws (Tinabla)</label>
                     <input type="number" name="draws" id="member_draws" class="form-control" min="0" value="0">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">Conditioning notes</label>
+                    <textarea name="conditioning_notes" id="member_conditioning_notes" class="form-control" rows="2" maxlength="500"
+                              placeholder="Optional notes about workouts, recovery or target event."></textarea>
                   </div>
                   <div class="col-12">
                     <div class="alert alert-info py-2 small mb-0">
@@ -1007,6 +1050,18 @@
               <div class="text-muted">Feed / diet</div>
               <div id="weightPlanFeed" class="fw-medium">—</div>
             </div>
+            <div class="col-6">
+              <div class="text-muted">Target date</div>
+              <div id="weightPlanTargetDate" class="fw-medium">—</div>
+            </div>
+            <div class="col-6">
+              <div class="text-muted">Current phase</div>
+              <div id="weightPlanPhase" class="fw-medium">—</div>
+            </div>
+            <div class="col-12" id="weightPlanNotesWrap">
+              <div class="text-muted">Notes</div>
+              <div id="weightPlanNotes" class="fw-medium">—</div>
+            </div>
           </div>
         </div>
 
@@ -1130,6 +1185,15 @@
     return form.querySelector('[name=csrfmiddlewaretoken]').value;
   }
 
+  function localDateString() {
+    const now = new Date();
+    return [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
+  }
+
   function showError(box, message) {
     box.textContent = message;
     box.classList.remove('d-none');
@@ -1188,9 +1252,12 @@
     document.getElementById('member_color').value = '';
     document.getElementById('member_cage_number').value = '';
     document.getElementById('member_conditioning_start_date').value = '';
+    document.getElementById('member_conditioning_target_date').value = '';
     document.getElementById('member_target_weight').value = '';
     document.getElementById('member_conditioning_program').value = '';
     document.getElementById('member_conditioning_feed_plan').value = '';
+    document.getElementById('member_conditioning_phase').value = 'foundation';
+    document.getElementById('member_conditioning_notes').value = '';
     document.getElementById('memberModalTitle').textContent = 'Add flock member';
 
     const button = event.relatedTarget;
@@ -1215,9 +1282,12 @@
     document.getElementById('member_color').value = button.dataset.color || '';
     document.getElementById('member_cage_number').value = button.dataset.cageNumber || '';
     document.getElementById('member_conditioning_start_date').value = button.dataset.conditioningStart || '';
+    document.getElementById('member_conditioning_target_date').value = button.dataset.conditioningTargetDate || '';
     document.getElementById('member_target_weight').value = button.dataset.targetWeight || '';
     document.getElementById('member_conditioning_program').value = button.dataset.conditioningProgram || '';
     document.getElementById('member_conditioning_feed_plan').value = button.dataset.conditioningFeed || '';
+    document.getElementById('member_conditioning_phase').value = button.dataset.conditioningPhase || 'foundation';
+    document.getElementById('member_conditioning_notes').value = button.dataset.conditioningNotes || '';
     document.getElementById('member_sire').value = button.dataset.sire || '';
     document.getElementById('member_dam').value = button.dataset.dam || '';
     syncConditioningRequirements();
@@ -1304,7 +1374,7 @@
     document.getElementById('bird_medicine_picker').value = '';
     document.getElementById('health_next_due_date').value = '';
     document.getElementById('health_notes').value = '';
-    document.getElementById('health_date_administered').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('health_date_administered').value = localDateString();
     document.getElementById('healthSubmitBtn').textContent = 'Add health record';
     document.getElementById('healthCancelEditBtn').classList.add('d-none');
     document.getElementById('healthFormTitle').textContent = 'Add health record';
@@ -1671,7 +1741,7 @@
       activeFightBirdId = button.dataset.id;
       document.getElementById('fightBirdTag').textContent = button.dataset.tagNumber || '';
       document.getElementById('fight_bird_id').value = activeFightBirdId;
-      document.getElementById('fight_date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('fight_date').value = localDateString();
       fightForm.reset();
       document.getElementById('fight_bird_id').value = activeFightBirdId;
       clearError(fightErrorBox);
@@ -1764,13 +1834,20 @@
     const target = button.dataset.targetWeight || '';
     const program = button.dataset.conditioningProgram || '';
     const feed = button.dataset.conditioningFeed || '';
+    const targetDate = button.dataset.conditioningTargetDate || '';
+    const phase = button.dataset.conditioningPhase || '';
+    const notes = button.dataset.conditioningNotes || '';
 
     document.getElementById('weightPlanStart').textContent = start || '—';
     document.getElementById('weightPlanTarget').textContent = target ? target + ' g' : '—';
     document.getElementById('weightPlanProgram').textContent = program || '—';
     document.getElementById('weightPlanFeed').textContent = feed || '—';
+    document.getElementById('weightPlanTargetDate').textContent = targetDate || '—';
+    document.getElementById('weightPlanPhase').textContent = phase || '—';
+    document.getElementById('weightPlanNotes').textContent = notes || '—';
+    document.getElementById('weightPlanNotesWrap').classList.toggle('d-none', !notes);
 
-    const hasPlan = start || target || program || feed;
+    const hasPlan = start || target || program || feed || targetDate || phase || notes;
     summary.classList.toggle('d-none', !hasPlan);
   }
 
@@ -1782,7 +1859,7 @@
       weightForm.reset();
       if (window.DHFormTabs) window.DHFormTabs.reset(weightForm);
       document.getElementById('weight_bird_id').value = activeWeightBirdId;
-      document.getElementById('weight_date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('weight_date').value = localDateString();
       clearError(weightErrorBox);
       updateWeightPlanSummary(button);
       loadWeightLogs(activeWeightBirdId);
@@ -1806,7 +1883,7 @@
       .then(() => {
         weightForm.reset();
         document.getElementById('weight_bird_id').value = activeWeightBirdId;
-        document.getElementById('weight_date').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('weight_date').value = localDateString();
         if (window.DHFormTabs) window.DHFormTabs.reset(weightForm);
         loadWeightLogs(activeWeightBirdId);
       })

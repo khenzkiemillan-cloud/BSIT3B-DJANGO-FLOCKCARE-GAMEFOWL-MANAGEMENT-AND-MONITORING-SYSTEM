@@ -21,7 +21,11 @@ urlpatterns = [
     path('ajax/weight/<int:pk>/', views.weight_logs_ajax, name='weight_logs_ajax'),
     path('ajax/weight/save/', views.weight_log_save_ajax, name='weight_log_save_ajax'),
     path('ajax/weight/delete/<int:pk>/', views.weight_log_delete_ajax, name='weight_log_delete_ajax'),
+    path('conditioning/', views.conditioning_list_page, name='conditioning_list'),
     path('ajax/conditioning/save/', views.conditioning_save_ajax, name='conditioning_save_ajax'),
+    path('ajax/conditioning/sessions/<int:pk>/', views.conditioning_sessions_ajax, name='conditioning_sessions_ajax'),
+    path('ajax/conditioning/session/save/', views.conditioning_session_save_ajax, name='conditioning_session_save_ajax'),
+    path('ajax/conditioning/session/delete/<int:pk>/', views.conditioning_session_delete_ajax, name='conditioning_session_delete_ajax'),
 
     # Breeding Pens & Clutches
     path('breeding/', views.breeding_list_page, name='breeding_list'),

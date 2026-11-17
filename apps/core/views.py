@@ -13,7 +13,9 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from apps.core.scoping import scoped_flock_members
-from apps.info.models import FinancialEntry, HealthRecord, Medicine
+from apps.info.models import (
+    FinancialEntry, HealthRecord, Medicine, conditioning_session_counts,
+)
 
 User = get_user_model()
 MAX_FAILED_ATTEMPTS = 5
@@ -213,6 +215,8 @@ def home(request):
     )
     overdue_records = overdue_qs.select_related('bird').order_by('next_due_date')[:5]
 
+    conditioning_due = conditioning_session_counts(request.user, today)
+
     medicine_expiry_cutoff = today + timedelta(days=30)
     medicine_alert_count = Medicine.objects.filter(user=request.user).filter(
         Q(stock_quantity__lte=F('low_stock_threshold')) |
@@ -234,6 +238,9 @@ def home(request):
         'total_birds': total_birds,
         'active_birds': active_birds,
         'conditioning_birds': conditioning_birds,
+        'conditioning_due_sessions': conditioning_due['due_today'],
+        'conditioning_overdue_sessions': conditioning_due['overdue'],
+        'conditioning_upcoming_sessions': conditioning_due['upcoming'],
         'retired_birds': retired_birds,
         'active_pct': active_pct,
         'conditioning_pct': conditioning_pct,

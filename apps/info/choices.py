@@ -58,7 +58,7 @@ COMMON_BREEDS = [
 # Common conditioning programs / regimens used to get a bird fight-ready.
 CONDITIONING_PROGRAMS = [
     'Roadwork', 'Sparring', 'Feed control', 'Free range', 'Cage rest',
-    'Water work', 'Combined program', 'Custom',
+    'Water work', 'Combined program',
 ]
 
 # Map a medicine cabinet category to the closest health record type.

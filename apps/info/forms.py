@@ -1,16 +1,59 @@
+from datetime import timedelta
+
 from django import forms
+from django.utils import timezone
 
 from .choices import CONDITIONING_PROGRAMS
 from .models import (
     FlockMember, HealthRecord, Medicine,
-    FightRecord, WeightLog, BreedingPen, ClutchRecord, FinancialEntry
+    FightRecord, WeightLog, BreedingPen, ClutchRecord, FinancialEntry,
+    ConditioningSession,
 )
+
+
+def _validate_conditioning_values(cleaned_data, add_error):
+    """Reject impossible or likely-typo conditioning dates and weights."""
+    today = timezone.localdate()
+    start_date = cleaned_data.get('conditioning_start_date')
+    target_date = cleaned_data.get('conditioning_target_date')
+    target_weight = cleaned_data.get('target_weight_grams')
+    current_weight = cleaned_data.get('weight_grams')
+
+    if start_date and start_date > today:
+        add_error(
+            'conditioning_start_date',
+            'Conditioning start date cannot be in the future.',
+        )
+
+    if target_date and start_date and target_date <= start_date:
+        add_error(
+            'conditioning_target_date',
+            'Target date must be after the conditioning start date.',
+        )
+
+    if target_date and target_date > today + timedelta(days=365):
+        add_error(
+            'conditioning_target_date',
+            'Target date must be within the next year.',
+        )
+
+    if target_weight and current_weight:
+        if abs(target_weight - current_weight) > current_weight * 0.5:
+            add_error(
+                'target_weight_grams',
+                'Target weight must be within 50% of the current weight. '
+                'Check the numbers before saving.',
+            )
 
 
 class ConditioningForm(forms.Form):
     """Validate the conditioning requirements for an existing bird."""
 
     conditioning_start_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    conditioning_target_date = forms.DateField(
+        required=False,
         widget=forms.DateInput(attrs={'type': 'date'}),
     )
     target_weight_grams = forms.IntegerField(min_value=1)
@@ -24,6 +67,14 @@ class ConditioningForm(forms.Form):
     )
     conditioning_feed_plan = forms.CharField(max_length=255)
     weight_grams = forms.IntegerField(min_value=0, required=False)
+    conditioning_phase = forms.ChoiceField(
+        choices=FlockMember.CONDITIONING_PHASES,
+        required=False,
+        initial='foundation',
+    )
+    conditioning_notes = forms.CharField(
+        max_length=500, required=False, widget=forms.Textarea(attrs={'rows': 2}),
+    )
 
     def clean(self):
         cleaned_data = super().clean()
@@ -36,6 +87,17 @@ class ConditioningForm(forms.Form):
                 )
             else:
                 cleaned_data['conditioning_program'] = custom
+
+        if not cleaned_data.get('conditioning_phase'):
+            cleaned_data['conditioning_phase'] = 'foundation'
+
+        cleaned_data['conditioning_feed_plan'] = (
+            cleaned_data.get('conditioning_feed_plan') or ''
+        ).strip()
+        cleaned_data['conditioning_notes'] = (
+            cleaned_data.get('conditioning_notes') or ''
+        ).strip()
+        _validate_conditioning_values(cleaned_data, self.add_error)
         return cleaned_data
 
 
@@ -55,7 +117,7 @@ class FlockMemberForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        for optional_field in ['wins', 'losses', 'draws', 'weight_grams', 'comb_type', 'leg_color', 'color', 'cage_number', 'image', 'sire', 'dam', 'birth_date', 'conditioning_start_date', 'target_weight_grams', 'conditioning_program', 'conditioning_feed_plan']:
+        for optional_field in ['wins', 'losses', 'draws', 'weight_grams', 'comb_type', 'leg_color', 'color', 'cage_number', 'image', 'sire', 'dam', 'birth_date', 'conditioning_start_date', 'target_weight_grams', 'conditioning_program', 'conditioning_feed_plan', 'conditioning_target_date', 'conditioning_notes']:
             if optional_field in self.fields:
                 self.fields[optional_field].required = False
 
@@ -78,14 +140,19 @@ class FlockMemberForm(forms.ModelForm):
             'losses',
             'draws',
             'conditioning_start_date',
+            'conditioning_target_date',
             'target_weight_grams',
             'conditioning_program',
             'conditioning_feed_plan',
+            'conditioning_phase',
+            'conditioning_notes',
             'image',
         ]
         widgets = {
             'birth_date': forms.DateInput(attrs={'type': 'date'}),
             'conditioning_start_date': forms.DateInput(attrs={'type': 'date'}),
+            'conditioning_target_date': forms.DateInput(attrs={'type': 'date'}),
+            'conditioning_notes': forms.Textarea(attrs={'rows': 2}),
         }
 
     def clean_tag_number(self):
@@ -122,6 +189,14 @@ class FlockMemberForm(forms.ModelForm):
                         f'{label} is required when the bird is in conditioning.',
                     )
 
+        for field_name in ('conditioning_program', 'conditioning_feed_plan'):
+            if cleaned_data.get(field_name) is not None:
+                cleaned_data[field_name] = cleaned_data[field_name].strip()
+
+        if not cleaned_data.get('conditioning_phase'):
+            cleaned_data['conditioning_phase'] = 'foundation'
+
+        _validate_conditioning_values(cleaned_data, self.add_error)
         return cleaned_data
 
     def clean_image(self):
@@ -134,6 +209,33 @@ class FlockMemberForm(forms.ModelForm):
             if image.size > 5 * 1024 * 1024:
                 raise forms.ValidationError('Image file must be under 5 MB.')
         return image
+
+
+class ConditioningSessionForm(forms.ModelForm):
+    """Validate a planned or completed step in a bird's conditioning plan."""
+
+    class Meta:
+        model = ConditioningSession
+        fields = [
+            'phase', 'session_type', 'title', 'scheduled_date',
+            'status', 'duration_minutes', 'notes',
+        ]
+        widgets = {
+            'scheduled_date': forms.DateInput(attrs={'type': 'date'}),
+            'notes': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def clean_title(self):
+        title = (self.cleaned_data.get('title') or '').strip()
+        if not title:
+            raise forms.ValidationError('Session title is required.')
+        return title
+
+    def clean_scheduled_date(self):
+        scheduled_date = self.cleaned_data.get('scheduled_date')
+        if scheduled_date and scheduled_date > timezone.localdate() + timedelta(days=365):
+            raise forms.ValidationError('Schedule sessions within the next year.')
+        return scheduled_date
 
 
 class HealthRecordForm(forms.ModelForm):
@@ -233,6 +335,18 @@ class WeightLogForm(forms.ModelForm):
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
         }
+
+    def clean_date(self):
+        date = self.cleaned_data.get('date')
+        if date and date > timezone.localdate():
+            raise forms.ValidationError('Weight log date cannot be in the future.')
+        return date
+
+    def clean_weight_grams(self):
+        weight = self.cleaned_data.get('weight_grams')
+        if weight is not None and weight > 20000:
+            raise forms.ValidationError('Enter a realistic weight in grams.')
+        return weight
 
 
 class BreedingPenForm(forms.ModelForm):

@@ -21,15 +21,117 @@ from .choices import (
 from .forms import (
     FlockMemberForm, HealthRecordForm, MedicineForm,
     FightRecordForm, WeightLogForm, BreedingPenForm, ClutchRecordForm,
-    ConditioningForm, FinancialEntryForm,
+    ConditioningForm, ConditioningSessionForm, FinancialEntryForm,
 )
 from .models import (
     Breed, FlockMember, HealthRecord, Medicine,
-    FightRecord, WeightLog, BreedingPen, ClutchRecord, FinancialEntry
+    FightRecord, WeightLog, BreedingPen, ClutchRecord, FinancialEntry,
+    ConditioningSession, conditioning_session_counts,
 )
 
 HEALTH_DUE_WINDOW_DAYS = 30
 MEDICINE_EXPIRY_WINDOW_DAYS = 30
+CONDITIONING_SESSION_TEMPLATE = [
+    (0, 'foundation', 'weigh_in', 'Baseline weigh-in & diet setup', 15,
+     'Record the starting weight and confirm the feed plan.'),
+    (3, 'foundation', 'cage_rest', 'Controlled rest & feed adjustment', None,
+     'Keep the bird calm while the body adjusts to the new ration.'),
+    (7, 'workout', 'roadwork', 'Light roadwork', 20,
+     'Short, steady roadwork. Watch breathing and recovery.'),
+    (14, 'workout', 'roadwork', 'Moderate roadwork & weigh-in', 30,
+     'Increase the workload gradually and log the weight change.'),
+    (21, 'sparring', 'sparring', 'Sparring assessment', 20,
+     'Controlled sparring to gauge timing, condition and confidence.'),
+    (28, 'peak', 'weigh_in', 'Peak weigh-in & tuning', 15,
+     'Final check before the event; adjust rest and feed as needed.'),
+]
+
+
+def _seed_conditioning_sessions(bird):
+    """Create the standard session plan once when conditioning starts."""
+    if bird.conditioning_sessions.exists():
+        return 0
+
+    start_date = bird.conditioning_start_date or timezone.localdate()
+    sessions = []
+    for offset, phase, session_type, title, duration, notes in CONDITIONING_SESSION_TEMPLATE:
+        sessions.append(ConditioningSession(
+            bird=bird,
+            phase=phase,
+            session_type=session_type,
+            title=title,
+            scheduled_date=start_date + timedelta(days=offset),
+            duration_minutes=duration,
+            notes=notes,
+        ))
+
+    target_date = bird.conditioning_target_date
+    if target_date and target_date - timedelta(days=1) > start_date:
+        sessions.append(ConditioningSession(
+            bird=bird,
+            phase='peak',
+            session_type='cage_rest',
+            title='Pre-event rest & final check',
+            scheduled_date=target_date - timedelta(days=1),
+            notes='Quiet rest, final weight check and equipment preparation.',
+        ))
+
+    ConditioningSession.objects.bulk_create(sessions)
+    return len(sessions)
+
+
+def _conditioning_bird_overview(members, today):
+    """Build the per-bird conditioning cards shown on the conditioning page."""
+    birds = []
+    all_overdue = []
+
+    queryset = members.filter(status='Conditioning').select_related('breed').prefetch_related(
+        'weight_logs', 'conditioning_sessions',
+    )
+
+    for bird in queryset:
+        sessions = list(bird.conditioning_sessions.all())
+        completed = [session for session in sessions if session.status == 'completed']
+        overdue = [session for session in sessions if session.is_overdue]
+        upcoming = [
+            session for session in sessions
+            if session.status == 'planned' and session.scheduled_date >= today
+        ]
+        all_overdue.extend(
+            {'bird': bird, 'session': session} for session in overdue
+        )
+        progress = bird.conditioning_progress_pct
+        to_target = bird.weight_to_target
+        birds.append({
+            'bird': bird,
+            'sessions': sessions,
+            'completed_count': len(completed),
+            'overdue_count': len(overdue),
+            'next_session': upcoming[0] if upcoming else None,
+            'progress': progress,
+            'progress_display': f'{progress}%' if progress is not None else '—',
+            'progress_width': progress if progress is not None else 0,
+            'to_target': to_target,
+            'to_target_display': (
+                f'{abs(to_target)} g to go' if to_target and to_target > 0
+                else f'{abs(to_target)} g over target' if to_target and to_target < 0
+                else 'On target' if to_target is not None else 'No target set'
+            ),
+        })
+
+    birds.sort(key=lambda item: (
+        -item['overdue_count'],
+        item['next_session'].scheduled_date if item['next_session'] else today + timedelta(days=3650),
+        item['bird'].tag_number,
+    ))
+
+    summary = {
+        'birds': len(birds),
+        'sessions': sum(len(item['sessions']) for item in birds),
+        'completed': sum(item['completed_count'] for item in birds),
+        'overdue': len(all_overdue),
+    }
+    return birds, all_overdue, summary
 
 
 def _form_error_message(form):
@@ -203,6 +305,7 @@ def info_list_page(request):
         'breeds': breeds,
         'common_breeds': COMMON_BREEDS,
         'conditioning_programs': CONDITIONING_PROGRAMS,
+        'phases': FlockMember.CONDITIONING_PHASES,
         'bird_tags': bird_tags,
         'farm_birds': scoped_flock_members(request.user).order_by('tag_number'),
         'medicine_options': _health_medicine_options(request.user),
@@ -263,6 +366,28 @@ def info_list_ajax(request):
         'page': page.number,
         'pages': paginator.num_pages,
         'total': paginator.count,
+    })
+
+
+@login_required(login_url='login')
+def conditioning_list_page(request):
+    """Render the dedicated conditioning workflow dashboard."""
+    today = timezone.localdate()
+    members = scoped_flock_members(request.user)
+    birds, overdue_sessions, summary = _conditioning_bird_overview(members, today)
+    due_counts = conditioning_session_counts(request.user, today)
+
+    return render(request, 'info/conditioning_list.html', {
+        'birds': birds,
+        'overdue_sessions': overdue_sessions,
+        'summary': summary,
+        'due_counts': due_counts,
+        'today': today,
+        'farm_birds': members.order_by('tag_number'),
+        'conditioning_programs': CONDITIONING_PROGRAMS,
+        'phases': FlockMember.CONDITIONING_PHASES,
+        'session_types': ConditioningSession.SESSION_TYPES,
+        'statuses': ConditioningSession.STATUS_CHOICES,
     })
 
 
@@ -532,25 +657,131 @@ def conditioning_save_ajax(request):
         )
 
     bird.conditioning_start_date = form.cleaned_data['conditioning_start_date']
+    bird.conditioning_target_date = form.cleaned_data.get('conditioning_target_date')
     bird.target_weight_grams = form.cleaned_data['target_weight_grams']
     bird.conditioning_program = form.cleaned_data['conditioning_program']
     bird.conditioning_feed_plan = form.cleaned_data['conditioning_feed_plan']
-    update_fields = [
-        'conditioning_start_date', 'target_weight_grams',
-        'conditioning_program', 'conditioning_feed_plan', 'status',
-    ]
+    bird.conditioning_phase = form.cleaned_data.get('conditioning_phase') or 'foundation'
+    bird.conditioning_notes = form.cleaned_data.get('conditioning_notes') or ''
+    bird.status = 'Conditioning'
+    bird.save(update_fields=[
+        'conditioning_start_date', 'conditioning_target_date',
+        'target_weight_grams', 'conditioning_program', 'conditioning_feed_plan',
+        'conditioning_phase', 'conditioning_notes', 'status',
+    ])
 
+    # A starting weight must be stored as a log. Setting bird.weight_grams
+    # directly would be erased by the next weight-log add/delete sync.
     weight = form.cleaned_data.get('weight_grams')
     if weight is not None:
-        bird.weight_grams = weight
-        update_fields.append('weight_grams')
+        baseline = bird.weight_logs.filter(
+            date=bird.conditioning_start_date,
+            time_of_day='morning',
+            notes__icontains='conditioning start',
+        ).first()
+        if baseline:
+            baseline.weight_grams = weight
+            baseline.save(update_fields=['weight_grams'])
+        else:
+            WeightLog.objects.create(
+                bird=bird,
+                date=bird.conditioning_start_date,
+                time_of_day='morning',
+                weight_grams=weight,
+                notes='Baseline weight at conditioning start',
+            )
+        _sync_latest_weight(bird)
 
-    bird.status = 'Conditioning'
-    bird.save(update_fields=update_fields)
+    seeded = _seed_conditioning_sessions(bird)
 
     return JsonResponse({
         'status': 'success',
         'message': f'{bird.tag_number} is now in conditioning.',
+        'sessions_created': seeded,
+    })
+
+
+@login_required(login_url='login')
+@_json_not_found
+def conditioning_sessions_ajax(request, pk):
+    """Return the session plan plus weight progress for one bird."""
+    bird = scoped_flock_member(request.user, pk)
+    sessions = bird.conditioning_sessions.all()
+    data = [{
+        'id': session.id,
+        'phase': session.phase,
+        'phase_display': session.get_phase_display(),
+        'session_type': session.session_type,
+        'type_display': session.get_session_type_display(),
+        'title': session.title,
+        'scheduled_date': str(session.scheduled_date),
+        'status': session.status,
+        'status_display': session.get_status_display(),
+        'duration_minutes': session.duration_minutes,
+        'notes': session.notes or '',
+        'is_overdue': session.is_overdue,
+    } for session in sessions]
+
+    return JsonResponse({
+        'bird_tag': bird.tag_number,
+        'status': bird.status,
+        'current_weight': bird.weight_grams,
+        'target_weight': bird.target_weight_grams,
+        'weight_to_target': bird.weight_to_target,
+        'progress': bird.conditioning_progress_pct,
+        'days_in_conditioning': bird.conditioning_days,
+        'data': data,
+    })
+
+
+@login_required(login_url='login')
+@require_POST
+@_json_not_found
+def conditioning_session_save_ajax(request):
+    """Create or update one conditioning session."""
+    session_id = (request.POST.get('id') or '').strip()
+    if session_id:
+        try:
+            session = ConditioningSession.objects.filter(
+                pk=session_id, bird__user=request.user,
+            ).first()
+        except (TypeError, ValueError):
+            session = None
+        if session is None:
+            raise Http404('Conditioning session not found.')
+    else:
+        bird_id = (request.POST.get('bird_id') or '').strip()
+        session = ConditioningSession(bird=scoped_flock_member(request.user, bird_id))
+
+    form = ConditioningSessionForm(request.POST, instance=session)
+    if not form.is_valid():
+        return JsonResponse(
+            {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
+            status=400,
+        )
+
+    session = form.save(commit=False)
+    session.completed_at = timezone.now() if session.status == 'completed' else None
+    session.save()
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Conditioning session saved.',
+        'id': session.pk,
+    })
+
+
+@login_required(login_url='login')
+@require_POST
+@_json_not_found
+def conditioning_session_delete_ajax(request, pk):
+    """Delete one conditioning session."""
+    session = ConditioningSession.objects.filter(pk=pk, bird__user=request.user).first()
+    if session is None:
+        raise Http404('Conditioning session not found.')
+    session.delete()
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Conditioning session deleted.',
     })
 
 

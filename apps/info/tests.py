@@ -6,7 +6,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Breed, FlockMember, HealthRecord, Medicine
+from .models import (
+    Breed, FlockMember, HealthRecord, Medicine, WeightLog, ConditioningSession,
+)
 
 
 class FlockTestCase(TestCase):
@@ -68,6 +70,20 @@ class DashboardTests(FlockTestCase):
         self.assertEqual(response.context['total_fights'], 6)
         self.assertEqual(response.context['win_rate'], 50)
         self.assertContains(response, 'Draws')
+
+    def test_dashboard_surfaces_overdue_conditioning_sessions(self):
+        self.bird.status = 'Conditioning'
+        self.bird.save(update_fields=['status'])
+        ConditioningSession.objects.create(
+            bird=self.bird,
+            title='Missed roadwork',
+            scheduled_date=timezone.localdate() - timedelta(days=1),
+        )
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.context['conditioning_overdue_sessions'], 1)
+        self.assertContains(response, 'session overdue')
 
 
 class FlockMemberPageTests(FlockTestCase):
@@ -937,6 +953,176 @@ class ConditioningQuickFormTests(FlockTestCase):
         self.assertEqual(response.status_code, 404)
         other_bird.refresh_from_db()
         self.assertEqual(other_bird.status, 'Active')
+
+
+class ConditioningWorkflowTests(FlockTestCase):
+    def start_conditioning(self, **overrides):
+        data = {
+            'bird_id': self.bird.pk,
+            'conditioning_start_date': '2026-11-15',
+            'target_weight_grams': '2150',
+            'conditioning_program': 'Roadwork',
+            'conditioning_feed_plan': 'High-protein mix, twice daily',
+        }
+        data.update(overrides)
+        return self.client.post(reverse('info:conditioning_save_ajax'), data)
+
+    def test_starting_weight_is_saved_as_a_log(self):
+        response = self.start_conditioning(weight_grams='2000')
+
+        self.assertEqual(response.status_code, 200)
+        log = self.bird.weight_logs.get()
+        self.assertEqual(log.weight_grams, 2000)
+        self.assertIn('conditioning start', log.notes.lower())
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.weight_grams, 2000)
+
+    def test_deleting_a_newer_log_does_not_erase_starting_weight(self):
+        self.start_conditioning(weight_grams='2000')
+        newer_log = WeightLog.objects.create(
+            bird=self.bird,
+            date=timezone.localdate(),
+            time_of_day='morning',
+            weight_grams=1980,
+        )
+
+        response = self.client.post(
+            reverse('info:weight_log_delete_ajax', args=[newer_log.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.weight_grams, 2000)
+
+    def test_standard_session_plan_is_seeded(self):
+        response = self.start_conditioning(conditioning_target_date='2026-12-15')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['sessions_created'], 7)
+        sessions = list(self.bird.conditioning_sessions.all())
+        self.assertEqual(len(sessions), 7)
+        self.assertEqual(sessions[-1].title, 'Pre-event rest & final check')
+        self.assertEqual(str(sessions[-1].scheduled_date), '2026-12-14')
+
+    def test_starting_again_does_not_duplicate_sessions(self):
+        self.start_conditioning()
+        response = self.start_conditioning(target_weight_grams='2100')
+
+        self.assertEqual(response.json()['sessions_created'], 0)
+        self.assertEqual(self.bird.conditioning_sessions.count(), 6)
+
+    def test_future_start_date_is_rejected(self):
+        future = timezone.localdate() + timedelta(days=2)
+        response = self.start_conditioning(conditioning_start_date=str(future))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('conditioning_start_date', response.json()['errors'])
+
+    def test_target_date_must_follow_start_date(self):
+        response = self.start_conditioning(conditioning_target_date='2026-11-01')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('conditioning_target_date', response.json()['errors'])
+
+    def test_unrealistic_target_weight_is_rejected(self):
+        response = self.start_conditioning(
+            weight_grams='2000', target_weight_grams='4000',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('target_weight_grams', response.json()['errors'])
+
+    def test_conditioning_dashboard_page_renders(self):
+        self.start_conditioning()
+
+        response = self.client.get(reverse('info:conditioning_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'info/conditioning_list.html')
+        self.assertContains(response, 'Conditioning Workflow')
+        self.assertContains(response, 'id="quickConditioningForm"')
+        self.assertContains(response, self.bird.tag_number)
+
+    def test_conditioning_dashboard_requires_login(self):
+        self.client.logout()
+
+        response = self.client.get(reverse('info:conditioning_list'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('login'), response.url)
+
+
+class ConditioningSessionTests(FlockTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.post(reverse('info:conditioning_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'conditioning_start_date': '2026-11-15',
+            'target_weight_grams': '2150',
+            'conditioning_program': 'Roadwork',
+            'conditioning_feed_plan': 'High-protein mix, twice daily',
+        })
+        self.session = self.bird.conditioning_sessions.first()
+
+    def test_session_list_returns_plan_and_progress(self):
+        response = self.client.get(
+            reverse('info:conditioning_sessions_ajax', args=[self.bird.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['bird_tag'], self.bird.tag_number)
+        self.assertEqual(len(data['data']), 6)
+        self.assertEqual(data['data'][0]['title'], self.session.title)
+
+    def test_marking_session_completed_sets_completed_at(self):
+        response = self.client.post(reverse('info:conditioning_session_save_ajax'), {
+            'id': self.session.pk,
+            'bird_id': self.bird.pk,
+            'title': self.session.title,
+            'scheduled_date': str(self.session.scheduled_date),
+            'phase': self.session.phase,
+            'session_type': self.session.session_type,
+            'status': 'completed',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.status, 'completed')
+        self.assertIsNotNone(self.session.completed_at)
+
+    def test_session_can_be_deleted(self):
+        response = self.client.post(
+            reverse('info:conditioning_session_delete_ajax', args=[self.session.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(self.bird.conditioning_sessions.filter(pk=self.session.pk).exists())
+
+    def test_cannot_edit_another_users_session(self):
+        other = get_user_model().objects.create_user(
+            username='other-session-owner', password='test-password'
+        )
+        other_bird = FlockMember.objects.create(
+            user=other, tag_number='OTHER-002', gender='Stag', status='Conditioning',
+        )
+        other_session = ConditioningSession.objects.create(
+            bird=other_bird,
+            title='Other plan',
+            scheduled_date=timezone.localdate(),
+        )
+
+        response = self.client.post(reverse('info:conditioning_session_save_ajax'), {
+            'id': other_session.pk,
+            'bird_id': other_bird.pk,
+            'title': 'Hijacked',
+            'scheduled_date': str(other_session.scheduled_date),
+            'status': 'completed',
+        })
+
+        self.assertEqual(response.status_code, 404)
+        other_session.refresh_from_db()
+        self.assertEqual(other_session.title, 'Other plan')
 
 
 class InlineQuickFormRenderTests(FlockTestCase):
