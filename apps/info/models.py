@@ -22,6 +22,7 @@ class FlockMember(models.Model):
         ('Broodcock', 'Broodcock'),
         ('Broodhen', 'Broodhen'),
         ('Retired', 'Retired'),
+        ('Sold', 'Sold'),
     ]
 
     GENDER_CHOICES = [
@@ -206,7 +207,9 @@ class ConditioningSession(models.Model):
 def conditioning_session_counts(user, today=None):
     """Return planned conditioning session counts for one user's flock."""
     today = today or timezone.localdate()
-    planned = ConditioningSession.objects.filter(bird__user=user, status='planned')
+    planned = ConditioningSession.objects.filter(
+        bird__user=user, bird__status='Conditioning', status='planned',
+    )
     return {
         'overdue': planned.filter(scheduled_date__lt=today).count(),
         'due_today': planned.filter(scheduled_date=today).count(),
@@ -443,3 +446,35 @@ class FinancialEntry(models.Model):
     def __str__(self):
         sign = '-' if self.entry_type == self.TYPE_EXPENSE else '+'
         return f"{sign}{self.amount} - {self.description}"
+
+
+class FlockSale(models.Model):
+    """A bird sold out of the flock, synced with the financial tracker."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='flock_sales')
+    bird = models.ForeignKey(
+        FlockMember, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sales', help_text='Flock member that was sold.',
+    )
+    buyer_name = models.CharField(max_length=150)
+    buyer_contact = models.CharField(
+        max_length=100, blank=True, help_text='Phone, email, or address of the buyer',
+    )
+    sale_date = models.DateField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    notes = models.TextField(blank=True)
+    financial_entry = models.OneToOneField(
+        FinancialEntry, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='flock_sale', help_text='Income entry generated for this sale.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-sale_date', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'sale_date']),
+        ]
+
+    def __str__(self):
+        tag = self.bird.tag_number if self.bird_id else 'Unknown bird'
+        return f'{tag} sold to {self.buyer_name} ({self.amount})'

@@ -11,6 +11,7 @@ urlpatterns = [
     path('ajax/get/<int:pk>/', views.info_get_ajax, name='info_get_ajax'),
     path('ajax/save/', views.info_save_ajax, name='info_save_ajax'),
     path('ajax/delete/<int:pk>/', views.info_delete_ajax, name='info_delete_ajax'),
+    path('ajax/breed/create/', views.breed_create_ajax, name='breed_create_ajax'),
 
     # Fight Records
     path('ajax/fight/<int:pk>/', views.fight_records_ajax, name='fight_records_ajax'),
@@ -53,6 +54,11 @@ urlpatterns = [
     path('finance/', views.finance_list_page, name='finance_list'),
     path('ajax/finance/save/', views.finance_save_ajax, name='finance_save_ajax'),
     path('ajax/finance/delete/<int:pk>/', views.finance_delete_ajax, name='finance_delete_ajax'),
+
+    # Flock sales
+    path('sales/', views.sales_list_page, name='sales_list'),
+    path('ajax/sales/save/', views.sale_save_ajax, name='sale_save_ajax'),
+    path('ajax/sales/delete/<int:pk>/', views.sale_delete_ajax, name='sale_delete_ajax'),
 
     # Batch Actions
     path('ajax/batch/', views.flock_batch_action_ajax, name='batch_action_ajax'),

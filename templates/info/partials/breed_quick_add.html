@@ -1,0 +1,101 @@
+<script>
+(function () {
+  const CREATE_URL = "{% url 'info:breed_create_ajax' %}";
+
+  function csrfToken() {
+    const input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return input ? input.value : '';
+  }
+
+  function normalize(value) {
+    return (value || '').trim().toLowerCase();
+  }
+
+  function findOption(select, id, name) {
+    const target = String(id);
+    const byId = Array.from(select.options).find(function (option) {
+      return option.value === target;
+    });
+    if (byId) return byId;
+
+    const key = normalize(name);
+    return Array.from(select.options).find(function (option) {
+      // Ignore placeholder values such as "" and the "__new__" sentinel.
+      return option.value && option.value.charAt(0) !== '_' && normalize(option.textContent) === key;
+    });
+  }
+
+  function insertOption(select, id, name) {
+    let option = findOption(select, id, name);
+    if (!option) {
+      option = document.createElement('option');
+      option.value = String(id);
+      option.textContent = name;
+
+      // Keep the "+ Add a new breed…" option at the bottom of the list.
+      const sentinel = Array.from(select.options).find(function (item) {
+        return item.value && item.value.charAt(0) === '_';
+      });
+      select.insertBefore(option, sentinel || null);
+    }
+    select.value = option.value;
+    return option;
+  }
+
+  function setHint(hint, message, isError) {
+    if (!hint) return;
+    hint.textContent = message;
+    hint.classList.toggle('text-danger', Boolean(isError));
+  }
+
+  function save(options) {
+    const select = options.select;
+    const input = options.input;
+    const button = options.button;
+    const hint = options.hint;
+    if (!select || !input) return;
+
+    const name = (input.value || '').trim();
+    if (!name) {
+      setHint(hint, 'Enter a breed name first.', true);
+      input.focus();
+      return;
+    }
+
+    if (button) button.disabled = true;
+    setHint(hint, 'Adding breed…', false);
+
+    const body = new FormData();
+    body.append('name', name);
+
+    fetch(CREATE_URL, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken() },
+      body: body,
+    })
+      .then(async function (response) {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not add the breed.');
+        return data;
+      })
+      .then(function (data) {
+        insertOption(select, data.id, data.name);
+        input.value = '';
+        setHint(hint, data.message || 'Breed added and selected.', false);
+        if (typeof options.onAdded === 'function') options.onAdded(data);
+      })
+      .catch(function (error) {
+        setHint(hint, error.message, true);
+      })
+      .finally(function () {
+        if (button) button.disabled = false;
+      });
+  }
+
+  window.DHBreedQuickAdd = {
+    insertOption: insertOption,
+    setHint: setHint,
+    save: save,
+  };
+})();
+</script>

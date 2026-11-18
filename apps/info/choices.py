@@ -61,6 +61,19 @@ CONDITIONING_PROGRAMS = [
     'Water work', 'Combined program',
 ]
 
+# Common feed / diet plans offered as quick picks while conditioning a bird.
+# Users can still choose "Custom" and type their own plan.
+CONDITIONING_FEED_PLANS = [
+    'High-protein pellets, twice daily',
+    'Mixed grains & seeds, twice daily',
+    'Corn, oats & barley mix',
+    'Booster mash with vitamins',
+    'Light feed — controlled ration',
+    'Free-range forage + supplement',
+    'Fight-ready conditioning mix',
+    'Recovery diet with electrolytes',
+]
+
 # Map a medicine cabinet category to the closest health record type.
 CATEGORY_RECORD_TYPES = {
     'Vaccine': 'Vaccination',

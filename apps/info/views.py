@@ -16,17 +16,18 @@ from django.views.decorators.http import require_POST
 from apps.core.scoping import scoped_flock_member, scoped_flock_members
 from .choices import (
     COMMON_BREEDS, COMMON_MEDICINES, MEDICINE_UNITS, CONDITIONING_PROGRAMS,
-    record_type_for_category,
+    CONDITIONING_FEED_PLANS, record_type_for_category,
 )
 from .forms import (
     FlockMemberForm, HealthRecordForm, MedicineForm,
     FightRecordForm, WeightLogForm, BreedingPenForm, ClutchRecordForm,
     ConditioningForm, ConditioningSessionForm, FinancialEntryForm,
+    FlockSaleForm,
 )
 from .models import (
     Breed, FlockMember, HealthRecord, Medicine,
     FightRecord, WeightLog, BreedingPen, ClutchRecord, FinancialEntry,
-    ConditioningSession, conditioning_session_counts,
+    ConditioningSession, FlockSale, conditioning_session_counts,
 )
 
 HEALTH_DUE_WINDOW_DAYS = 30
@@ -264,6 +265,7 @@ def info_list_page(request):
         active=Count('id', filter=Q(status='Active')),
         conditioning=Count('id', filter=Q(status='Conditioning')),
         retired=Count('id', filter=Q(status='Retired')),
+        sold=Count('id', filter=Q(status='Sold')),
         breeding=Count('id', filter=Q(status__in=['Broodcock', 'Broodhen'])),
     )
 
@@ -305,6 +307,7 @@ def info_list_page(request):
         'breeds': breeds,
         'common_breeds': COMMON_BREEDS,
         'conditioning_programs': CONDITIONING_PROGRAMS,
+        'conditioning_feed_plans': CONDITIONING_FEED_PLANS,
         'phases': FlockMember.CONDITIONING_PHASES,
         'bird_tags': bird_tags,
         'farm_birds': scoped_flock_members(request.user).order_by('tag_number'),
@@ -385,6 +388,7 @@ def conditioning_list_page(request):
         'today': today,
         'farm_birds': members.order_by('tag_number'),
         'conditioning_programs': CONDITIONING_PROGRAMS,
+        'conditioning_feed_plans': CONDITIONING_FEED_PLANS,
         'phases': FlockMember.CONDITIONING_PHASES,
         'session_types': ConditioningSession.SESSION_TYPES,
         'statuses': ConditioningSession.STATUS_CHOICES,
@@ -467,6 +471,36 @@ def info_delete_ajax(request, pk):
     return JsonResponse({
         'status': 'success',
         'message': f'Flock member "{tag_number}" deleted successfully.',
+    })
+
+
+# --- BREEDS ---
+
+@login_required(login_url='login')
+@require_POST
+def breed_create_ajax(request):
+    """Create a breed now so it can be selected in the dropdown immediately."""
+    name = (request.POST.get('name') or '').strip()
+    if not name:
+        return JsonResponse({'error': 'Enter a breed name.'}, status=400)
+    if len(name) > 100:
+        return JsonResponse({'error': 'Breed name must be 100 characters or fewer.'}, status=400)
+
+    breed = Breed.objects.filter(name__iexact=name).first()
+    created = False
+    if breed is None:
+        breed = Breed.objects.create(name=name)
+        created = True
+
+    return JsonResponse({
+        'status': 'success',
+        'id': breed.pk,
+        'name': breed.name,
+        'created': created,
+        'message': (
+            f'Breed "{breed.name}" added and selected.'
+            if created else f'Breed "{breed.name}" already exists and was selected.'
+        ),
     })
 
 
@@ -1432,3 +1466,158 @@ def finance_delete_ajax(request, pk):
 
     entry.delete()
     return JsonResponse({'status': 'success', 'message': 'Financial entry deleted successfully.'})
+
+
+# --- FLOCK SALES ---
+
+def _sync_sale_financial_entry(sale):
+    """Create or update the income entry that mirrors a bird sale."""
+    entry = sale.financial_entry or FinancialEntry(user=sale.user)
+    tag = sale.bird.tag_number if sale.bird_id else 'Unknown bird'
+    entry.user = sale.user
+    entry.bird = sale.bird
+    entry.entry_type = FinancialEntry.TYPE_INCOME
+    entry.category = 'Bird Sale'
+    entry.amount = sale.amount
+    entry.date = sale.sale_date
+    entry.description = f'Bird sale — {tag} to {sale.buyer_name}'[:200]
+    entry.notes = sale.notes
+    entry.save()
+
+    if sale.financial_entry_id != entry.pk:
+        sale.financial_entry = entry
+        sale.save(update_fields=['financial_entry'])
+    return entry
+
+
+def _mark_bird_sold(bird):
+    """Move a sold bird out of the active flock status."""
+    if bird is not None and bird.status != 'Sold':
+        bird.status = 'Sold'
+        bird.save(update_fields=['status'])
+
+
+def _restore_bird_after_sale(bird):
+    """Return a bird to active status when its last sale record is removed."""
+    if bird is None or bird.status != 'Sold':
+        return
+    if not bird.sales.exists():
+        bird.status = 'Active'
+        bird.save(update_fields=['status'])
+
+
+@login_required(login_url='login')
+def sales_list_page(request):
+    """Render the flock sales ledger with revenue summaries."""
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+    query = request.GET.get('q', '').strip()
+    period = request.GET.get('period', '').strip()
+
+    all_sales = FlockSale.objects.filter(user=request.user)
+    counts = all_sales.aggregate(
+        total=Count('id'),
+        birds_sold=Count('bird', distinct=True),
+        buyers=Count('buyer_name', distinct=True),
+    )
+    totals = all_sales.aggregate(
+        total_revenue=Sum('amount'),
+        month_revenue=Sum('amount', filter=Q(sale_date__gte=month_start)),
+    )
+    total_revenue = totals['total_revenue'] or Decimal('0.00')
+    month_revenue = totals['month_revenue'] or Decimal('0.00')
+
+    sales = all_sales.select_related('bird', 'bird__breed')
+    if query:
+        sales = sales.filter(
+            Q(buyer_name__icontains=query) |
+            Q(buyer_contact__icontains=query) |
+            Q(bird__tag_number__icontains=query) |
+            Q(notes__icontains=query)
+        )
+
+    if period == 'month':
+        sales = sales.filter(sale_date__gte=month_start)
+    elif period == 'year':
+        sales = sales.filter(sale_date__year=today.year)
+    else:
+        period = ''
+
+    sales = sales.order_by('-sale_date', '-created_at')
+    paginator = Paginator(sales, 15)
+    page = paginator.get_page(request.GET.get('page', 1))
+
+    return render(request, 'info/sales_list.html', {
+        'sales': page,
+        'query': query,
+        'period': period,
+        'counts': counts,
+        'total_revenue': total_revenue,
+        'month_revenue': month_revenue,
+        'birds': scoped_flock_members(request.user).select_related('breed').order_by('tag_number'),
+        'today': today,
+    })
+
+
+@login_required(login_url='login')
+@require_POST
+@_json_not_found
+@transaction.atomic
+def sale_save_ajax(request):
+    """Create or update a flock sale and its linked income entry."""
+    sale_id = (request.POST.get('id') or '').strip()
+
+    if sale_id:
+        if not sale_id.isdigit():
+            raise Http404('Sale not found.')
+        sale = FlockSale.objects.filter(pk=sale_id, user=request.user).first()
+        if sale is None:
+            raise Http404('Sale not found.')
+    else:
+        sale = FlockSale(user=request.user)
+
+    previous_bird = sale.bird if sale.pk else None
+
+    form = FlockSaleForm(request.POST, instance=sale, user=request.user)
+    if not form.is_valid():
+        return JsonResponse(
+            {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
+            status=400,
+        )
+
+    sale = form.save(commit=False)
+    sale.user = request.user
+    sale.save()
+    _sync_sale_financial_entry(sale)
+    _mark_bird_sold(sale.bird)
+
+    if previous_bird is not None and previous_bird.pk != sale.bird_id:
+        _restore_bird_after_sale(previous_bird)
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Sale updated successfully.' if sale_id else 'Sale recorded successfully.',
+        'id': sale.pk,
+    })
+
+
+@login_required(login_url='login')
+@require_POST
+@_json_not_found
+@transaction.atomic
+def sale_delete_ajax(request, pk):
+    """Delete a sale, its linked income entry, and restore the bird status."""
+    sale = FlockSale.objects.filter(pk=pk, user=request.user).select_related('financial_entry').first()
+    if sale is None:
+        raise Http404('Sale not found.')
+
+    bird = sale.bird
+    if sale.financial_entry_id:
+        sale.financial_entry.delete()
+    sale.delete()
+    _restore_bird_after_sale(bird)
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Sale deleted successfully.',
+    })

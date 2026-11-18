@@ -363,13 +363,23 @@
             </div>
             <div class="dh-record-row">
               <span class="dh-record-label">
+                <span class="dh-status-badge is-info"><i class="fas fa-tags"></i></span>
+                <a class="dh-metric-label mb-0 text-decoration-none" href="{% url 'info:sales_list' %}">Bird sales</a>
+              </span>
+              <span class="dh-metric-value-sm">₱{{ finance_sales|floatformat:2 }}</span>
+            </div>
+            <div class="dh-record-row">
+              <span class="dh-record-label">
                 <span class="dh-status-badge is-primary"><i class="fas fa-scale-balanced"></i></span>
                 <span class="dh-metric-label mb-0">Net balance</span>
               </span>
               <span class="dh-metric-value-sm {% if finance_net >= 0 %}text-success{% else %}text-danger{% endif %}">₱{{ finance_net|floatformat:2 }}</span>
             </div>
           </div>
-          <div class="dh-metric-label mt-3">Track feed, medicine, entry fees, sales, and prizes per bird.</div>
+          <div class="dh-metric-label mt-3">
+            Track feed, medicine, entry fees, sales, and prizes per bird.
+            <a href="{% url 'info:sales_list' %}" class="text-decoration-none">View {{ finance_sales_count }} sale{{ finance_sales_count|pluralize }} <i class="fas fa-arrow-right ms-1"></i></a>
+          </div>
         </div>
       </div>
     </div>
@@ -396,6 +406,10 @@
             <a href="{% url 'info:finance_list' %}" class="dh-quick-action">
               <i class="fas fa-wallet"></i>
               <span>Finance tracker</span>
+            </a>
+            <a href="{% url 'info:sales_list' %}" class="dh-quick-action">
+              <i class="fas fa-tags"></i>
+              <span>Sales ledger</span>
             </a>
             {% if user.is_superuser %}
             <a href="{% url 'users:user_list' %}" class="dh-quick-action">

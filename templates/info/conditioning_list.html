@@ -97,7 +97,18 @@
           </div>
           <div class="col-sm-6 col-lg-3">
             <label class="form-label required" for="quick_cond_feed">Feed / diet plan</label>
-            <input type="text" name="conditioning_feed_plan" id="quick_cond_feed" class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily" required>
+            <select name="conditioning_feed_plan" id="quick_cond_feed" class="form-select" required>
+              <option value="">Select a diet plan</option>
+              {% for plan in conditioning_feed_plans %}
+              <option value="{{ plan }}">{{ plan }}</option>
+              {% endfor %}
+              <option value="Custom">Custom / other diet</option>
+            </select>
+          </div>
+          <div class="col-sm-6 col-lg-3 d-none" id="quickCondFeedCustomWrap">
+            <label class="form-label required" for="quick_cond_feed_custom">Custom diet plan</label>
+            <input type="text" name="conditioning_feed_plan_custom" id="quick_cond_feed_custom"
+                   class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily">
           </div>
           <div class="col-sm-6 col-lg-3">
             <label class="form-label" for="quick_cond_weight">Current weight (g)</label>
@@ -356,6 +367,9 @@
   const programSelect = document.getElementById('quick_cond_program');
   const customWrap = document.getElementById('quickCondCustomWrap');
   const customInput = document.getElementById('quick_cond_custom');
+  const feedSelect = document.getElementById('quick_cond_feed');
+  const feedCustomWrap = document.getElementById('quickCondFeedCustomWrap');
+  const feedCustomInput = document.getElementById('quick_cond_feed_custom');
   const submitBtn = document.getElementById('quickConditioningSubmit');
 
   function showError(message) {
@@ -376,6 +390,15 @@
   }
 
   programSelect.addEventListener('change', toggleCustomProgram);
+
+  function toggleCustomFeed() {
+    const isCustom = feedSelect.value === 'Custom';
+    feedCustomWrap.classList.toggle('d-none', !isCustom);
+    feedCustomInput.required = isCustom;
+    if (!isCustom) feedCustomInput.value = '';
+  }
+
+  feedSelect.addEventListener('change', toggleCustomFeed);
 
   form.addEventListener('submit', function (event) {
     event.preventDefault();

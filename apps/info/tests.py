@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from .models import (
     Breed, FlockMember, HealthRecord, Medicine, WeightLog, ConditioningSession,
+    FinancialEntry, FlockSale,
 )
 
 
@@ -143,6 +144,44 @@ class FlockMemberAjaxTests(FlockTestCase):
         self.assertEqual(member.wins, 2)
         self.assertEqual(member.target_weight_grams, 2200)
         self.assertEqual(member.conditioning_program, 'Roadwork')
+
+    def test_custom_feed_plan_is_saved_from_member_form(self):
+        response = self.client.post(reverse('info:info_save_ajax'), {
+            'tag_number': 'K-007',
+            'gender': 'Stag',
+            'status': 'Conditioning',
+            'wins': '0',
+            'losses': '0',
+            'draws': '0',
+            'conditioning_start_date': '2026-02-01',
+            'target_weight_grams': '2200',
+            'conditioning_program': 'Roadwork',
+            'conditioning_feed_plan': 'Custom',
+            'conditioning_feed_plan_custom': 'Farm mix with coconut oil',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        member = FlockMember.objects.get(user=self.user, tag_number='K-007')
+        self.assertEqual(member.conditioning_feed_plan, 'Farm mix with coconut oil')
+
+    def test_custom_feed_plan_requires_a_name(self):
+        response = self.client.post(reverse('info:info_save_ajax'), {
+            'tag_number': 'K-008',
+            'gender': 'Stag',
+            'status': 'Conditioning',
+            'wins': '0',
+            'losses': '0',
+            'draws': '0',
+            'conditioning_start_date': '2026-02-01',
+            'target_weight_grams': '2200',
+            'conditioning_program': 'Roadwork',
+            'conditioning_feed_plan': 'Custom',
+            'conditioning_feed_plan_custom': '',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('conditioning_feed_plan_custom', response.json()['errors'])
+        self.assertFalse(FlockMember.objects.filter(user=self.user, tag_number='K-008').exists())
 
     def test_conditioning_status_requires_conditioning_details(self):
         response = self.client.post(reverse('info:info_save_ajax'), {
@@ -920,6 +959,35 @@ class ConditioningQuickFormTests(FlockTestCase):
         self.bird.refresh_from_db()
         self.assertEqual(self.bird.conditioning_program, 'Beach roadwork')
 
+    def test_custom_feed_plan_name_is_saved(self):
+        response = self.client.post(reverse('info:conditioning_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'conditioning_start_date': '2026-11-15',
+            'target_weight_grams': '2150',
+            'conditioning_program': 'Roadwork',
+            'conditioning_feed_plan': 'Custom',
+            'conditioning_feed_plan_custom': 'Farm blend with copra meal',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.conditioning_feed_plan, 'Farm blend with copra meal')
+
+    def test_custom_feed_plan_requires_a_name(self):
+        response = self.client.post(reverse('info:conditioning_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'conditioning_start_date': '2026-11-15',
+            'target_weight_grams': '2150',
+            'conditioning_program': 'Roadwork',
+            'conditioning_feed_plan': 'Custom',
+            'conditioning_feed_plan_custom': '',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('conditioning_feed_plan_custom', response.json()['errors'])
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.status, 'Active')
+
     def test_missing_bird_returns_400(self):
         response = self.client.post(reverse('info:conditioning_save_ajax'), {
             'conditioning_start_date': '2026-11-15',
@@ -1135,6 +1203,18 @@ class InlineQuickFormRenderTests(FlockTestCase):
         self.assertContains(response, 'id="quickConditioningForm"')
         self.assertNotContains(response, 'id="quickMemberForm"')
 
+    def test_conditioning_forms_render_preset_diet_plan_options(self):
+        conditioning_page = self.client.get(reverse('info:conditioning_list'))
+        self.assertContains(conditioning_page, 'id="quick_cond_feed"')
+        self.assertContains(conditioning_page, 'High-protein pellets, twice daily')
+        self.assertContains(conditioning_page, 'id="quick_cond_feed_custom"')
+
+        flock_page = self.client.get(reverse('info:info_list'), {'status': 'Conditioning'})
+        self.assertContains(flock_page, 'Booster mash with vitamins')
+        self.assertContains(flock_page, 'id="quick_cond_feed_custom"')
+        self.assertContains(flock_page, 'id="member_conditioning_feed_plan"')
+        self.assertContains(flock_page, 'id="member_conditioning_feed_plan_custom"')
+
     def test_dashboard_does_not_render_quick_member_form(self):
         response = self.client.get(reverse('dashboard'))
         self.assertNotContains(response, 'id="quickMemberForm"')
@@ -1143,6 +1223,16 @@ class InlineQuickFormRenderTests(FlockTestCase):
     def test_breeding_page_renders_quick_pen_form(self):
         response = self.client.get(reverse('info:breeding_list'))
         self.assertContains(response, 'id="quickPenForm"')
+
+    def test_breeding_page_binds_quick_pen_script_inside_turbo_frame(self):
+        response = self.client.get(reverse('info:breeding_list'))
+        html = response.content.decode()
+
+        # The save handler must live inside the Turbo frame; scripts rendered
+        # after </turbo-frame> never run when the page is opened from the sidebar.
+        save_url_position = html.index(reverse('info:breeding_pen_save_ajax'))
+        self.assertLess(html.index('id="quickPenForm"'), save_url_position)
+        self.assertLess(save_url_position, html.index('</turbo-frame>'))
 
     def test_health_page_renders_quick_health_form(self):
         response = self.client.get(reverse('info:health_list'))
@@ -1154,6 +1244,28 @@ class InlineQuickFormRenderTests(FlockTestCase):
 
 
 class BreedingModuleTests(FlockTestCase):
+    def test_new_pen_record_appears_on_breeding_page(self):
+        hen = FlockMember.objects.create(
+            user=self.user,
+            tag_number='HEN-002',
+            gender='Hen',
+            status='Broodhen',
+        )
+
+        response = self.client.post(reverse('info:breeding_pen_save_ajax'), {
+            'pen_number': 'Pen-9Z',
+            'sire': self.bird.pk,
+            'dam': hen.pk,
+            'date_paired': timezone.localdate(),
+            'status': 'active',
+        })
+        self.assertEqual(response.status_code, 200)
+
+        page = self.client.get(reverse('info:breeding_list'))
+        self.assertContains(page, 'Pen-9Z')
+        self.assertContains(page, self.bird.tag_number)
+        self.assertContains(page, hen.tag_number)
+
     def test_breeding_pen_and_clutch_workflow(self):
         hen = FlockMember.objects.create(
             user=self.user,
@@ -1196,5 +1308,152 @@ class PedigreeCertificateTests(FlockTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Certificate of Pedigree')
         self.assertContains(response, self.bird.tag_number)
+
+
+class FlockSaleTests(FlockTestCase):
+    def record_sale(self, **overrides):
+        data = {
+            'bird': self.bird.pk,
+            'buyer_name': 'Juan Dela Cruz',
+            'buyer_contact': '0917 555 0100',
+            'sale_date': str(timezone.localdate()),
+            'amount': '8500.00',
+            'notes': 'Delivered at the farm',
+        }
+        data.update(overrides)
+        return self.client.post(reverse('info:sale_save_ajax'), data)
+
+    def test_record_sale_creates_income_and_marks_bird_sold(self):
+        response = self.record_sale()
+
+        self.assertEqual(response.status_code, 200)
+        sale = FlockSale.objects.get(user=self.user)
+        self.assertEqual(sale.bird, self.bird)
+        self.assertEqual(sale.amount, Decimal('8500.00'))
+        entry = sale.financial_entry
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.entry_type, FinancialEntry.TYPE_INCOME)
+        self.assertEqual(entry.category, 'Bird Sale')
+        self.assertEqual(entry.amount, sale.amount)
+        self.assertEqual(entry.bird, self.bird)
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.status, 'Sold')
+
+    def test_sales_page_lists_sales_and_totals(self):
+        self.record_sale()
+
+        response = self.client.get(reverse('info:sales_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'info/sales_list.html')
+        self.assertContains(response, 'Juan Dela Cruz')
+        self.assertContains(response, self.bird.tag_number)
+        self.assertEqual(response.context['total_revenue'], Decimal('8500.00'))
+        self.assertEqual(response.context['counts']['birds_sold'], 1)
+
+    def test_sales_page_requires_login(self):
+        self.client.logout()
+
+        response = self.client.get(reverse('info:sales_list'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('login'), response.url)
+
+    def test_update_sale_syncs_financial_entry(self):
+        self.record_sale()
+        sale = FlockSale.objects.get()
+
+        response = self.client.post(reverse('info:sale_save_ajax'), {
+            'id': sale.pk,
+            'bird': self.bird.pk,
+            'buyer_name': 'Maria Santos',
+            'sale_date': str(timezone.localdate()),
+            'amount': '9000.00',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        sale.refresh_from_db()
+        self.assertEqual(sale.buyer_name, 'Maria Santos')
+        self.assertEqual(sale.financial_entry.amount, Decimal('9000.00'))
+        self.assertEqual(FinancialEntry.objects.filter(user=self.user).count(), 1)
+
+    def test_delete_sale_removes_income_and_restores_bird(self):
+        self.record_sale()
+        sale = FlockSale.objects.get()
+
+        response = self.client.post(reverse('info:sale_delete_ajax', args=[sale.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(FlockSale.objects.exists())
+        self.assertFalse(FinancialEntry.objects.exists())
+        self.bird.refresh_from_db()
+        self.assertEqual(self.bird.status, 'Active')
+
+    def test_cannot_sell_another_users_bird(self):
+        other = get_user_model().objects.create_user(
+            username='other-sale-owner', password='test-password'
+        )
+        other_bird = FlockMember.objects.create(
+            user=other, tag_number='OTHER-003', gender='Stag', status='Active',
+        )
+
+        response = self.record_sale(bird=other_bird.pk)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(FlockSale.objects.exists())
+
+    def test_future_sale_date_is_rejected(self):
+        future = timezone.localdate() + timedelta(days=2)
+
+        response = self.record_sale(sale_date=str(future))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('sale_date', response.json()['errors'])
+
+
+class BreedQuickAddTests(FlockTestCase):
+    def post_breed(self, name):
+        return self.client.post(reverse('info:breed_create_ajax'), {'name': name})
+
+    def test_create_breed_returns_new_option(self):
+        response = self.post_breed('Sweater')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertEqual(data['name'], 'Sweater')
+        self.assertTrue(data['created'])
+        self.assertTrue(Breed.objects.filter(pk=data['id'], name='Sweater').exists())
+
+    def test_existing_breed_is_reused_case_insensitively(self):
+        response = self.post_breed('kelso')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data['created'])
+        self.assertEqual(data['id'], self.breed.pk)
+        self.assertEqual(data['name'], 'Kelso')
+        self.assertEqual(Breed.objects.filter(name__iexact='kelso').count(), 1)
+
+    def test_blank_breed_name_is_rejected(self):
+        response = self.post_breed('   ')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.json())
+
+    def test_overlong_breed_name_is_rejected(self):
+        response = self.post_breed('A' * 101)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Breed.objects.filter(name='A' * 101).exists())
+
+    def test_breed_creation_requires_login(self):
+        self.client.logout()
+
+        response = self.post_breed('New Breed')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('login'), response.url)
+        self.assertFalse(Breed.objects.filter(name='New Breed').exists())
 
 

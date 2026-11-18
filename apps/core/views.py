@@ -14,7 +14,7 @@ from django.views.decorators.http import require_http_methods
 
 from apps.core.scoping import scoped_flock_members
 from apps.info.models import (
-    FinancialEntry, HealthRecord, Medicine, conditioning_session_counts,
+    FinancialEntry, FlockSale, HealthRecord, Medicine, conditioning_session_counts,
 )
 
 User = get_user_model()
@@ -231,9 +231,17 @@ def home(request):
     finance_income = finance_totals['total_income'] or 0
     finance_expenses = finance_totals['total_expenses'] or 0
 
+    sales_totals = FlockSale.objects.filter(user=request.user).aggregate(
+        total_sales=Sum('amount'),
+        sales_count=Count('id'),
+    )
+    finance_sales = sales_totals['total_sales'] or 0
+
     context = {
         'finance_income': finance_income,
         'finance_expenses': finance_expenses,
+        'finance_sales': finance_sales,
+        'finance_sales_count': sales_totals['sales_count'] or 0,
         'finance_net': finance_income - finance_expenses,
         'total_birds': total_birds,
         'active_birds': active_birds,

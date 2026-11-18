@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Breed, FlockMember, HealthRecord, Medicine, FightRecord, WeightLog,
-    BreedingPen, ClutchRecord, ConditioningSession,
+    BreedingPen, ClutchRecord, ConditioningSession, FinancialEntry, FlockSale,
 )
 
 
@@ -64,3 +64,17 @@ class BreedingPenAdmin(admin.ModelAdmin):
 class ClutchRecordAdmin(admin.ModelAdmin):
     list_display = ('pen', 'clutch_number', 'date_started', 'eggs_collected', 'fertile_eggs', 'hatched_count', 'hatch_date')
     list_filter = ('date_started', 'hatch_date')
+
+
+@admin.register(FinancialEntry)
+class FinancialEntryAdmin(admin.ModelAdmin):
+    list_display = ('date', 'entry_type', 'category', 'amount', 'description', 'bird', 'user')
+    list_filter = ('entry_type', 'category', 'date')
+    search_fields = ('description', 'notes', 'bird__tag_number')
+
+
+@admin.register(FlockSale)
+class FlockSaleAdmin(admin.ModelAdmin):
+    list_display = ('sale_date', 'bird', 'buyer_name', 'amount', 'financial_entry', 'user')
+    list_filter = ('sale_date',)
+    search_fields = ('buyer_name', 'buyer_contact', 'bird__tag_number', 'notes')

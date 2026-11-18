@@ -65,11 +65,15 @@
             {% endfor %}
             <option value="__new__">+ Add a new breed…</option>
           </select>
+          <small class="form-hint" id="quickBreedHint">Choose a breed or add a new one.</small>
         </div>
         <div class="col-sm-6 col-lg-3 d-none" id="quickNewBreedWrap">
           <label class="form-label" for="quick_member_new_breed">New breed name</label>
-          <input type="text" name="new_breed" id="quick_member_new_breed" class="form-control"
-                 maxlength="100" list="quickBreedSuggestions" placeholder="e.g. Sweater">
+          <div class="input-group">
+            <input type="text" name="new_breed" id="quick_member_new_breed" class="form-control"
+                   maxlength="100" list="quickBreedSuggestions" placeholder="e.g. Sweater">
+            <button type="button" class="btn btn-outline-primary" id="quickAddBreedBtn">Add</button>
+          </div>
         </div>
         <div class="col-sm-6 col-lg-3">
           <label class="form-label" for="quick_member_birth">Hatch date</label>
@@ -120,7 +124,10 @@
   const breedSelect = document.getElementById('quick_member_breed');
   const newBreedWrap = document.getElementById('quickNewBreedWrap');
   const newBreedInput = document.getElementById('quick_member_new_breed');
+  const addBreedBtn = document.getElementById('quickAddBreedBtn');
+  const breedHint = document.getElementById('quickBreedHint');
   const submitBtn = document.getElementById('quickMemberSubmit');
+  const BREED_HINT = 'Choose a breed or add a new one.';
 
   function showError(message) {
     errorBox.textContent = message;
@@ -139,7 +146,31 @@
     if (!isNew) newBreedInput.value = '';
   }
 
-  breedSelect.addEventListener('change', toggleNewBreed);
+  breedSelect.addEventListener('change', function () {
+    if (breedSelect.value !== '__new__' && window.DHBreedQuickAdd) {
+      window.DHBreedQuickAdd.setHint(breedHint, BREED_HINT, false);
+    }
+    toggleNewBreed();
+  });
+
+  function addNewBreed() {
+    if (!window.DHBreedQuickAdd) return;
+    window.DHBreedQuickAdd.save({
+      select: breedSelect,
+      input: newBreedInput,
+      button: addBreedBtn,
+      hint: breedHint,
+      onAdded: toggleNewBreed,
+    });
+  }
+
+  addBreedBtn.addEventListener('click', addNewBreed);
+  newBreedInput.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addNewBreed();
+    }
+  });
 
   form.addEventListener('submit', function (event) {
     event.preventDefault();

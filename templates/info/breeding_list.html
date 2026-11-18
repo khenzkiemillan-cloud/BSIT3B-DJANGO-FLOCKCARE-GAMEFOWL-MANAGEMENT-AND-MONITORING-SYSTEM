@@ -473,185 +473,205 @@
     </div>
   </div>
 
-{% endblock %}
-
-{% block extra_js %}
-<script>
-  function openClutchModal(penId) {
-    const form = document.getElementById('clutchForm');
-    form.reset();
-    document.getElementById('clutch_pen_id').value = penId;
-    document.querySelector('#clutchForm [name="date_started"]').value = "{% now 'Y-m-d' %}";
-    if (window.DHFormTabs) window.DHFormTabs.reset(form);
-    new bootstrap.Modal(document.getElementById('clutchModal')).show();
-  }
-
-  const penModalEl = document.getElementById('penModal');
-
-  function updatePairPreview(selectId, previewId, label) {
-    const select = document.getElementById(selectId);
-    const preview = document.getElementById(previewId);
-    if (!select || !preview) return;
-    const option = select.options[select.selectedIndex];
-    if (!option || !option.value) {
-      preview.textContent = 'Select a ' + label + ' to see its breed, status, and record.';
-      return;
-    }
-    preview.textContent =
-      option.text.split(' — ')[0].trim() + ' — ' +
-      (option.dataset.breed || 'Unclassified') + ' • ' +
-      (option.dataset.gender || '') + ' • ' +
-      (option.dataset.status || '') + ' • ' +
-      (option.dataset.wins || 0) + ' win(s)';
-  }
-
-  function refreshPairPreviews() {
-    updatePairPreview('pen_sire', 'sirePreview', 'sire');
-    updatePairPreview('pen_dam', 'damPreview', 'dam');
-  }
-
-  ['pen_sire', 'pen_dam'].forEach(function (id) {
-    const select = document.getElementById(id);
-    if (select) select.addEventListener('change', refreshPairPreviews);
-  });
-
-  if (penModalEl) {
-    penModalEl.addEventListener('show.bs.modal', function () {
-      const form = document.getElementById('penForm');
+  <script>
+  (function () {
+    // This script lives inside the Turbo frame so it re-binds whenever the
+    // breeding page is rendered (sidebar navigation or refreshMainContent).
+    function openClutchModal(penId) {
+      const form = document.getElementById('clutchForm');
       form.reset();
-      document.getElementById('pen_date_paired').value = "{% now 'Y-m-d' %}";
-      document.getElementById('pen_status').value = 'active';
+      document.getElementById('clutch_pen_id').value = penId;
+      document.querySelector('#clutchForm [name="date_started"]').value = "{% now 'Y-m-d' %}";
       if (window.DHFormTabs) window.DHFormTabs.reset(form);
-      refreshPairPreviews();
-      document.getElementById('penError').classList.add('d-none');
-    });
-  }
+      new bootstrap.Modal(document.getElementById('clutchModal')).show();
+    }
+    window.openClutchModal = openClutchModal;
 
-  document.getElementById('penForm').addEventListener('submit', function (e) {
-    e.preventDefault();
-    const form = this;
-    if (window.DHFormTabs && !window.DHFormTabs.validate(form)) return;
-    const formData = new FormData(form);
-    fetch("{% url 'info:breeding_pen_save_ajax' %}", {
-      method: "POST",
-      body: formData,
-      headers: { "X-Requested-With": "XMLHttpRequest" }
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.status === 'success') {
-        window.location.reload();
-      } else {
-        document.getElementById('penError').textContent = data.error || 'Failed to save pen.';
-        document.getElementById('penError').classList.remove('d-none');
+    const penModalEl = document.getElementById('penModal');
+
+    function updatePairPreview(selectId, previewId, label) {
+      const select = document.getElementById(selectId);
+      const preview = document.getElementById(previewId);
+      if (!select || !preview) return;
+      const option = select.options[select.selectedIndex];
+      if (!option || !option.value) {
+        preview.textContent = 'Select a ' + label + ' to see its breed, status, and record.';
+        return;
       }
-    })
-    .catch(function (error) {
-      document.getElementById('penError').textContent = error.message || 'Failed to save pen.';
-      document.getElementById('penError').classList.remove('d-none');
-    });
-  });
-
-  document.getElementById('clutchForm').addEventListener('submit', function (e) {
-    e.preventDefault();
-    const form = this;
-    if (window.DHFormTabs && !window.DHFormTabs.validate(form)) return;
-    const formData = new FormData(form);
-    fetch("{% url 'info:clutch_save_ajax' %}", {
-      method: "POST",
-      body: formData,
-      headers: { "X-Requested-With": "XMLHttpRequest" }
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.status === 'success') {
-        window.location.reload();
-      } else {
-        document.getElementById('clutchError').textContent = data.error || 'Failed to save clutch.';
-        document.getElementById('clutchError').classList.remove('d-none');
-      }
-    })
-    .catch(function (error) {
-      document.getElementById('clutchError').textContent = error.message || 'Failed to save clutch.';
-      document.getElementById('clutchError').classList.remove('d-none');
-    });
-  });
-
-  const DELETE_PEN_URL = "{% url 'info:breeding_pen_delete_ajax' 0 %}";
-
-  function deletePen(id) {
-    if (!confirm('Are you sure you want to delete this breeding pen?')) return;
-    const formData = new FormData();
-    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-    fetch(DELETE_PEN_URL.replace(/\/0\/$/, '/' + id + '/'), {
-      method: "POST",
-      body: formData,
-      headers: { "X-Requested-With": "XMLHttpRequest" }
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.status === 'success') window.location.reload();
-      else alert(data.error || 'Failed to delete pen.');
-    })
-    .catch(function (error) {
-      alert(error.message || 'Failed to delete pen.');
-    });
-  }
-</script>
-<script>
-(function () {
-  const form = document.getElementById('quickPenForm');
-  if (!form) return;
-
-  const errorBox = document.getElementById('quickPenError');
-  const submitBtn = document.getElementById('quickPenSubmit');
-
-  function showError(message) {
-    errorBox.textContent = message;
-    errorBox.classList.remove('d-none');
-  }
-
-  function clearError() {
-    errorBox.textContent = '';
-    errorBox.classList.add('d-none');
-  }
-
-  form.addEventListener('submit', function (event) {
-    event.preventDefault();
-    clearError();
-
-    if (!form.checkValidity()) {
-      form.reportValidity();
-      return;
+      preview.textContent =
+        option.text.split(' — ')[0].trim() + ' — ' +
+        (option.dataset.breed || 'Unclassified') + ' • ' +
+        (option.dataset.gender || '') + ' • ' +
+        (option.dataset.status || '') + ' • ' +
+        (option.dataset.wins || 0) + ' win(s)';
     }
 
-    const formData = new FormData(form);
-    submitBtn.disabled = true;
+    function refreshPairPreviews() {
+      updatePairPreview('pen_sire', 'sirePreview', 'sire');
+      updatePairPreview('pen_dam', 'damPreview', 'dam');
+    }
 
-    fetch("{% url 'info:breeding_pen_save_ajax' %}", {
-      method: 'POST',
-      headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') },
-      body: formData,
-    })
-      .then(async function (response) {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Could not save the breeding pen.');
-        return data;
+    ['pen_sire', 'pen_dam'].forEach(function (id) {
+      const select = document.getElementById(id);
+      if (select) select.addEventListener('change', refreshPairPreviews);
+    });
+
+    if (penModalEl) {
+      penModalEl.addEventListener('show.bs.modal', function () {
+        const form = document.getElementById('penForm');
+        form.reset();
+        document.getElementById('pen_date_paired').value = "{% now 'Y-m-d' %}";
+        document.getElementById('pen_status').value = 'active';
+        if (window.DHFormTabs) window.DHFormTabs.reset(form);
+        refreshPairPreviews();
+        document.getElementById('penError').classList.add('d-none');
+      });
+    }
+
+    document.getElementById('penForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const form = this;
+      if (window.DHFormTabs && !window.DHFormTabs.validate(form)) return;
+      const formData = new FormData(form);
+      fetch("{% url 'info:breeding_pen_save_ajax' %}", {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
       })
-      .then(function () {
-        if (typeof window.refreshMainContent === 'function') {
-          window.refreshMainContent();
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'success') {
+          bootstrap.Modal.getOrCreateInstance(penModalEl).hide();
+          if (typeof window.refreshMainContent === 'function') {
+            window.refreshMainContent();
+          } else {
+            window.location.reload();
+          }
         } else {
-          window.location.reload();
+          document.getElementById('penError').textContent = data.error || 'Failed to save pen.';
+          document.getElementById('penError').classList.remove('d-none');
         }
       })
       .catch(function (error) {
-        showError(error.message);
-      })
-      .finally(function () {
-        submitBtn.disabled = false;
+        document.getElementById('penError').textContent = error.message || 'Failed to save pen.';
+        document.getElementById('penError').classList.remove('d-none');
       });
-  });
-})();
-</script>
+    });
+
+    document.getElementById('clutchForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const form = this;
+      if (window.DHFormTabs && !window.DHFormTabs.validate(form)) return;
+      const formData = new FormData(form);
+      fetch("{% url 'info:clutch_save_ajax' %}", {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'success') {
+          bootstrap.Modal.getOrCreateInstance(document.getElementById('clutchModal')).hide();
+          if (typeof window.refreshMainContent === 'function') {
+            window.refreshMainContent();
+          } else {
+            window.location.reload();
+          }
+        } else {
+          document.getElementById('clutchError').textContent = data.error || 'Failed to save clutch.';
+          document.getElementById('clutchError').classList.remove('d-none');
+        }
+      })
+      .catch(function (error) {
+        document.getElementById('clutchError').textContent = error.message || 'Failed to save clutch.';
+        document.getElementById('clutchError').classList.remove('d-none');
+      });
+    });
+
+    function deletePen(id) {
+      if (!confirm('Are you sure you want to delete this breeding pen?')) return;
+      const formData = new FormData();
+      formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+      fetch("{% url 'info:breeding_pen_delete_ajax' 0 %}".replace(/\/0\/$/, '/' + id + '/'), {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'success') {
+          if (typeof window.refreshMainContent === 'function') {
+            window.refreshMainContent();
+          } else {
+            window.location.reload();
+          }
+        } else {
+          alert(data.error || 'Failed to delete pen.');
+        }
+      })
+      .catch(function (error) {
+        alert(error.message || 'Failed to delete pen.');
+      });
+    }
+    window.deletePen = deletePen;
+  })();
+  </script>
+
+  <script>
+  (function () {
+    const form = document.getElementById('quickPenForm');
+    if (!form) return;
+
+    const errorBox = document.getElementById('quickPenError');
+    const submitBtn = document.getElementById('quickPenSubmit');
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.classList.remove('d-none');
+    }
+
+    function clearError() {
+      errorBox.textContent = '';
+      errorBox.classList.add('d-none');
+    }
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      clearError();
+
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      const formData = new FormData(form);
+      submitBtn.disabled = true;
+
+      fetch("{% url 'info:breeding_pen_save_ajax' %}", {
+        method: 'POST',
+        headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') },
+        body: formData,
+      })
+        .then(async function (response) {
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Could not save the breeding pen.');
+          return data;
+        })
+        .then(function () {
+          if (typeof window.refreshMainContent === 'function') {
+            window.refreshMainContent();
+          } else {
+            window.location.reload();
+          }
+        })
+        .catch(function (error) {
+          showError(error.message);
+        })
+        .finally(function () {
+          submitBtn.disabled = false;
+        });
+    });
+  })();
+  </script>
+
 {% endblock %}

@@ -46,6 +46,8 @@
     </div>
   </div>
 
+  {% include "info/partials/breed_quick_add.html" %}
+
   {% if status == 'Conditioning' %}
   <div class="card mb-3 dh-inline-form" id="quickConditioningCard">
     <div class="card-header d-flex flex-wrap align-items-center gap-2">
@@ -128,8 +130,18 @@
           </div>
           <div class="col-sm-6 col-lg-3">
             <label class="form-label required" for="quick_cond_feed">Feed / diet plan</label>
-            <input type="text" name="conditioning_feed_plan" id="quick_cond_feed"
-                   class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily" required>
+            <select name="conditioning_feed_plan" id="quick_cond_feed" class="form-select" required>
+              <option value="">Select a diet plan</option>
+              {% for plan in conditioning_feed_plans %}
+              <option value="{{ plan }}">{{ plan }}</option>
+              {% endfor %}
+              <option value="Custom">Custom / other diet</option>
+            </select>
+          </div>
+          <div class="col-sm-6 col-lg-3 d-none" id="quickCondFeedCustomWrap">
+            <label class="form-label required" for="quick_cond_feed_custom">Custom diet plan</label>
+            <input type="text" name="conditioning_feed_plan_custom" id="quick_cond_feed_custom"
+                   class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily">
           </div>
           <div class="col-sm-6 col-lg-3">
             <label class="form-label" for="quick_cond_weight">Current weight (g)</label>
@@ -191,6 +203,10 @@
          class="dh-chip {% if status == 'Retired' %}is-active{% endif %}">
         Retired <span class="dh-chip-count">{{ counts.retired }}</span>
       </a>
+      <a href="?status=Sold{% if query %}&q={{ query|urlencode }}{% endif %}"
+         class="dh-chip {% if status == 'Sold' %}is-active{% endif %}">
+        Sold <span class="dh-chip-count">{{ counts.sold }}</span>
+      </a>
       <a href="?status=breeding{% if query %}&q={{ query|urlencode }}{% endif %}"
          class="dh-chip {% if status == 'breeding' %}is-active{% endif %}">
         Breeding <span class="dh-chip-count">{{ counts.breeding }}</span>
@@ -230,6 +246,7 @@
               <a class="dropdown-item" href="#" onclick="applyBatchStatus('Broodcock')">Broodcock</a>
               <a class="dropdown-item" href="#" onclick="applyBatchStatus('Broodhen')">Broodhen</a>
               <a class="dropdown-item" href="#" onclick="applyBatchStatus('Retired')">Retired</a>
+              <a class="dropdown-item" href="#" onclick="applyBatchStatus('Sold')">Sold</a>
             </div>
           </div>
           <button type="button" class="btn btn-sm btn-outline-danger" onclick="applyBatchDelete()">
@@ -279,6 +296,8 @@
               <span class="dh-status is-warning"><span class="dh-status-dot"></span>{{ bird.status }}</span>
               {% elif bird.status == 'Retired' %}
               <span class="dh-status is-muted"><span class="dh-status-dot"></span>{{ bird.status }}</span>
+              {% elif bird.status == 'Sold' %}
+              <span class="dh-status is-info"><span class="dh-status-dot"></span>{{ bird.status }}</span>
               {% else %}
               <span class="dh-status is-info"><span class="dh-status-dot"></span>{{ bird.status }}</span>
               {% endif %}
@@ -525,8 +544,11 @@
                   </div>
                   <div class="col-md-6">
                     <label class="form-label">Add a new breed</label>
-                    <input type="text" name="new_breed" id="member_new_breed" class="form-control" maxlength="100" list="breedSuggestions" placeholder="e.g. Sweater">
-                    <small class="form-hint">Optional. If filled, this breed is created and used instead of the selection.</small>
+                    <div class="input-group">
+                      <input type="text" name="new_breed" id="member_new_breed" class="form-control" maxlength="100" list="breedSuggestions" placeholder="e.g. Sweater">
+                      <button type="button" class="btn btn-outline-primary" id="memberAddBreedBtn">Add breed</button>
+                    </div>
+                    <small class="form-hint" id="memberBreedHint">Optional. The breed is added to the dropdown and selected immediately.</small>
                   </div>
                   <div class="col-md-6">
                     <label class="form-label required">Gender</label>
@@ -546,6 +568,7 @@
                       <option value="Broodcock">Broodcock</option>
                       <option value="Broodhen">Broodhen</option>
                       <option value="Retired">Retired</option>
+                      <option value="Sold">Sold</option>
                     </select>
                   </div>
                   <div class="col-md-6">
@@ -607,7 +630,18 @@
                   </div>
                   <div class="col-md-6">
                     <label class="form-label" data-conditioning-label>Feed / diet plan</label>
-                    <input type="text" name="conditioning_feed_plan" id="member_conditioning_feed_plan" class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily">
+                    <select name="conditioning_feed_plan" id="member_conditioning_feed_plan" class="form-select">
+                      <option value="">Select a diet plan</option>
+                      {% for plan in conditioning_feed_plans %}
+                      <option value="{{ plan }}">{{ plan }}</option>
+                      {% endfor %}
+                      <option value="Custom">Custom / other diet</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6 d-none" id="memberFeedCustomWrap">
+                    <label class="form-label" id="memberFeedCustomLabel">Custom diet plan</label>
+                    <input type="text" name="conditioning_feed_plan_custom" id="member_conditioning_feed_plan_custom"
+                           class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily">
                   </div>
                   <div class="col-md-6">
                     <label class="form-label">Current phase</label>
@@ -1139,6 +1173,15 @@
   const memberForm = document.getElementById('memberForm');
   const healthForm = document.getElementById('healthForm');
   const memberStatusField = document.getElementById('member_status');
+  const memberBreedSelect = document.getElementById('member_breed');
+  const memberNewBreedInput = document.getElementById('member_new_breed');
+  const memberAddBreedBtn = document.getElementById('memberAddBreedBtn');
+  const memberBreedHint = document.getElementById('memberBreedHint');
+  const MEMBER_BREED_HINT = 'Optional. The breed is added to the dropdown and selected immediately.';
+  const memberFeedSelect = document.getElementById('member_conditioning_feed_plan');
+  const memberFeedCustomWrap = document.getElementById('memberFeedCustomWrap');
+  const memberFeedCustomInput = document.getElementById('member_conditioning_feed_plan_custom');
+  const memberFeedCustomLabel = document.getElementById('memberFeedCustomLabel');
   const conditioningFieldIds = [
     'member_conditioning_start_date',
     'member_target_weight',
@@ -1158,6 +1201,59 @@
   }
 
   memberStatusField.addEventListener('change', syncConditioningRequirements);
+
+  function syncMemberFeedCustom() {
+    const isCustom = memberFeedSelect.value === 'Custom';
+    memberFeedCustomWrap.classList.toggle('d-none', !isCustom);
+    memberFeedCustomInput.required = isCustom;
+    if (!isCustom) memberFeedCustomInput.value = '';
+    memberFeedCustomLabel.classList.toggle('required', isCustom);
+  }
+
+  function setMemberFeedPlan(value) {
+    const isPreset = Array.from(memberFeedSelect.options).some(function (option) {
+      return option.value === value && option.value && option.value !== 'Custom';
+    });
+    if (value && !isPreset) {
+      memberFeedSelect.value = 'Custom';
+      memberFeedCustomInput.value = value;
+    } else {
+      memberFeedSelect.value = value || '';
+      memberFeedCustomInput.value = '';
+    }
+    syncMemberFeedCustom();
+  }
+
+  memberFeedSelect.addEventListener('change', syncMemberFeedCustom);
+
+  function addMemberBreed() {
+    if (!window.DHBreedQuickAdd) return;
+    window.DHBreedQuickAdd.save({
+      select: memberBreedSelect,
+      input: memberNewBreedInput,
+      button: memberAddBreedBtn,
+      hint: memberBreedHint,
+    });
+  }
+
+  if (memberAddBreedBtn) {
+    memberAddBreedBtn.addEventListener('click', addMemberBreed);
+  }
+  if (memberNewBreedInput) {
+    memberNewBreedInput.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addMemberBreed();
+      }
+    });
+  }
+  if (memberBreedSelect) {
+    memberBreedSelect.addEventListener('change', function () {
+      if (window.DHBreedQuickAdd) {
+        window.DHBreedQuickAdd.setHint(memberBreedHint, MEMBER_BREED_HINT, false);
+      }
+    });
+  }
 
   const memberErrorBox = document.getElementById('memberFormError');
   const healthErrorBox = document.getElementById('healthFormError');
@@ -1244,6 +1340,9 @@
     if (window.DHFormTabs) window.DHFormTabs.reset(memberForm);
     document.getElementById('member_id').value = '';
     document.getElementById('member_new_breed').value = '';
+    if (window.DHBreedQuickAdd) {
+      window.DHBreedQuickAdd.setHint(memberBreedHint, MEMBER_BREED_HINT, false);
+    }
     document.getElementById('member_wins').value = '0';
     document.getElementById('member_losses').value = '0';
     document.getElementById('member_draws').value = '0';
@@ -1255,7 +1354,7 @@
     document.getElementById('member_conditioning_target_date').value = '';
     document.getElementById('member_target_weight').value = '';
     document.getElementById('member_conditioning_program').value = '';
-    document.getElementById('member_conditioning_feed_plan').value = '';
+    setMemberFeedPlan('');
     document.getElementById('member_conditioning_phase').value = 'foundation';
     document.getElementById('member_conditioning_notes').value = '';
     document.getElementById('memberModalTitle').textContent = 'Add flock member';
@@ -1285,7 +1384,7 @@
     document.getElementById('member_conditioning_target_date').value = button.dataset.conditioningTargetDate || '';
     document.getElementById('member_target_weight').value = button.dataset.targetWeight || '';
     document.getElementById('member_conditioning_program').value = button.dataset.conditioningProgram || '';
-    document.getElementById('member_conditioning_feed_plan').value = button.dataset.conditioningFeed || '';
+    setMemberFeedPlan(button.dataset.conditioningFeed || '');
     document.getElementById('member_conditioning_phase').value = button.dataset.conditioningPhase || 'foundation';
     document.getElementById('member_conditioning_notes').value = button.dataset.conditioningNotes || '';
     document.getElementById('member_sire').value = button.dataset.sire || '';
@@ -1916,6 +2015,9 @@
   const programSelect = document.getElementById('quick_cond_program');
   const customWrap = document.getElementById('quickCondCustomWrap');
   const customInput = document.getElementById('quick_cond_custom');
+  const feedSelect = document.getElementById('quick_cond_feed');
+  const feedCustomWrap = document.getElementById('quickCondFeedCustomWrap');
+  const feedCustomInput = document.getElementById('quick_cond_feed_custom');
   const submitBtn = document.getElementById('quickConditioningSubmit');
 
   function showError(message) {
@@ -1936,6 +2038,15 @@
   }
 
   programSelect.addEventListener('change', toggleCustomProgram);
+
+  function toggleCustomFeed() {
+    const isCustom = feedSelect.value === 'Custom';
+    feedCustomWrap.classList.toggle('d-none', !isCustom);
+    feedCustomInput.required = isCustom;
+    if (!isCustom) feedCustomInput.value = '';
+  }
+
+  feedSelect.addEventListener('change', toggleCustomFeed);
 
   form.addEventListener('submit', function (event) {
     event.preventDefault();
