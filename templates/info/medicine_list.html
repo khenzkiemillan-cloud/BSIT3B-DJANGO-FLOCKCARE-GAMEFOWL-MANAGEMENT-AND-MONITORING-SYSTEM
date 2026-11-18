@@ -289,6 +289,7 @@
                         data-id="{{ medicine.id }}"
                         data-name="{{ medicine.name }}"
                         data-unit="{{ medicine.unit }}"
+                        data-cost="{{ medicine.unit_cost|floatformat:'-2' }}"
                         title="Restock"
                         aria-label="Restock {{ medicine.name }}">
                   <i class="fas fa-plus text-success"></i>
@@ -520,6 +521,15 @@
           </p>
           <label class="form-label required">Quantity to add (<span id="restockUnit">ml</span>)</label>
           <input type="number" name="amount" id="restock_amount" class="form-control" min="0.01" step="0.01" value="1" required>
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" name="record_expense" id="restock_record_expense" checked>
+            <label class="form-check-label" for="restock_record_expense">Record this restock as an expense</label>
+          </div>
+          <div id="restockExpenseFields" class="mt-3">
+            <label class="form-label" for="restock_total_cost">Total cost paid (PHP)</label>
+            <input type="number" name="total_cost" id="restock_total_cost" class="form-control" min="0" step="0.01" placeholder="Calculated from cost per unit">
+            <small class="form-hint">Leave blank to use quantity × cost per unit.</small>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -540,6 +550,23 @@
   const restockErrorBox = document.getElementById('restockFormError');
   const alertBox = document.getElementById('medicineAlert');
   const tableBody = document.getElementById('medicineTable');
+  const restockExpenseToggle = document.getElementById('restock_record_expense');
+  const restockExpenseFields = document.getElementById('restockExpenseFields');
+  const restockAmountInput = document.getElementById('restock_amount');
+  const restockTotalCostInput = document.getElementById('restock_total_cost');
+  let restockUnitCost = 0;
+
+  function syncRestockExpenseFields() {
+    restockExpenseFields.classList.toggle('d-none', !restockExpenseToggle.checked);
+  }
+
+  function updateRestockCostHint() {
+    const quantity = parseFloat(restockAmountInput.value) || 0;
+    const estimate = quantity * restockUnitCost;
+    restockTotalCostInput.placeholder = estimate > 0
+      ? 'e.g. ' + estimate.toFixed(2)
+      : 'Calculated from cost per unit';
+  }
 
   const SAVE_URL = "{% url 'info:medicine_save_ajax' %}";
   const RESTOCK_URL = "{% url 'info:medicine_restock_ajax' %}";
@@ -643,12 +670,20 @@
 
   restockModalEl.addEventListener('show.bs.modal', function (event) {
     const button = event.relatedTarget;
+    restockUnitCost = parseFloat(button.dataset.cost) || 0;
     document.getElementById('restock_id').value = button.dataset.id || '';
     document.getElementById('restockName').textContent = button.dataset.name || '';
     document.getElementById('restockUnit').textContent = button.dataset.unit || '';
     document.getElementById('restock_amount').value = '1';
+    document.getElementById('restock_total_cost').value = '';
+    document.getElementById('restock_record_expense').checked = true;
+    syncRestockExpenseFields();
+    updateRestockCostHint();
     clearError(restockErrorBox);
   });
+
+  restockExpenseToggle.addEventListener('change', syncRestockExpenseFields);
+  restockAmountInput.addEventListener('input', updateRestockCostHint);
 
   restockForm.addEventListener('submit', function (event) {
     event.preventDefault();

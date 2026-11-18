@@ -4,6 +4,7 @@ from functools import wraps
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, DecimalField, F, Q, Sum
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
@@ -905,13 +906,64 @@ def medicine_restock_ajax(request):
     if new_stock > Decimal('99999999.99'):
         return JsonResponse({'error': 'That restock would exceed the maximum stock quantity.'}, status=400)
 
-    medicine.stock_quantity = new_stock
-    medicine.save(update_fields=['stock_quantity'])
+    record_expense = (request.POST.get('record_expense') or '').lower() in ('1', 'true', 'on', 'yes')
+    total_cost_raw = (request.POST.get('total_cost') or '').strip()
+    total_cost = Decimal('0.00')
+
+    if record_expense:
+        if total_cost_raw:
+            try:
+                total_cost = Decimal(total_cost_raw)
+            except (InvalidOperation, TypeError, ValueError):
+                return JsonResponse({'error': 'Enter a valid total cost.'}, status=400)
+
+            if not total_cost.is_finite():
+                return JsonResponse({'error': 'Enter a valid total cost.'}, status=400)
+
+            try:
+                total_cost = total_cost.quantize(Decimal('0.01'))
+            except InvalidOperation:
+                return JsonResponse({'error': 'Enter a valid total cost.'}, status=400)
+        else:
+            # Fall back to the medicine's per-unit cost when no receipt total
+            # was supplied.
+            total_cost = ((medicine.unit_cost or Decimal('0.00')) * amount).quantize(Decimal('0.01'))
+
+        if total_cost <= 0:
+            return JsonResponse(
+                {'error': 'Enter the total cost paid for this restock.'},
+                status=400,
+            )
+        if total_cost > Decimal('9999999999.99'):
+            return JsonResponse({'error': 'That expense amount is too large.'}, status=400)
+
+    with transaction.atomic():
+        medicine.stock_quantity = new_stock
+        medicine.save(update_fields=['stock_quantity'])
+
+        if record_expense:
+            Expense.objects.create(
+                user=request.user,
+                bird=None,
+                category='Medicine',
+                amount=total_cost,
+                date=timezone.localdate(),
+                description=(
+                    f'Medicine restock: {medicine.name} '
+                    f'({format(amount.normalize(), "f")} {medicine.unit})'
+                )[:200],
+                notes='Auto-logged from a medicine restock.',
+            )
+
+    message = f'Added {format(amount.normalize(), "f")} {medicine.unit} to {medicine.name}.'
+    if record_expense:
+        message += f' Logged PHP {format(total_cost, ".2f")} as a Medicine expense.'
 
     return JsonResponse({
         'status': 'success',
-        'message': f'Added {format(amount.normalize(), "f")} {medicine.unit} to {medicine.name}.',
+        'message': message,
         'stock_quantity': format(medicine.stock_quantity.normalize(), 'f'),
+        'expense_logged': record_expense,
     })
 
 

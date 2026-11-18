@@ -628,6 +628,49 @@ class MedicineCabinetTests(FlockTestCase):
         self.out_of_stock_medicine.refresh_from_db()
         self.assertEqual(self.out_of_stock_medicine.stock_quantity, Decimal('10.50'))
         self.assertEqual(response.json()['stock_quantity'], '10.5')
+        self.assertFalse(Expense.objects.exists())
+
+    def test_restock_logs_expense_with_supplied_total(self):
+        response = self.client.post(reverse('info:medicine_restock_ajax'), {
+            'id': self.out_of_stock_medicine.pk,
+            'amount': '10',
+            'record_expense': 'on',
+            'total_cost': '480.50',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        expense = Expense.objects.get(user=self.user)
+        self.assertIsNone(expense.bird)
+        self.assertEqual(expense.category, 'Medicine')
+        self.assertEqual(expense.amount, Decimal('480.50'))
+        self.assertIn(self.out_of_stock_medicine.name, expense.description)
+        self.assertTrue(response.json()['expense_logged'])
+
+    def test_restock_expense_uses_unit_cost_when_total_is_blank(self):
+        self.low_stock_medicine.unit_cost = Decimal('12.50')
+        self.low_stock_medicine.save(update_fields=['unit_cost'])
+
+        response = self.client.post(reverse('info:medicine_restock_ajax'), {
+            'id': self.low_stock_medicine.pk,
+            'amount': '4',
+            'record_expense': 'on',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        expense = Expense.objects.get(user=self.user)
+        self.assertEqual(expense.amount, Decimal('50.00'))
+
+    def test_restock_expense_requires_total_when_unit_cost_is_zero(self):
+        response = self.client.post(reverse('info:medicine_restock_ajax'), {
+            'id': self.out_of_stock_medicine.pk,
+            'amount': '2',
+            'record_expense': 'on',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.out_of_stock_medicine.refresh_from_db()
+        self.assertEqual(self.out_of_stock_medicine.stock_quantity, Decimal('0.00'))
+        self.assertFalse(Expense.objects.exists())
 
     def test_restock_rejects_invalid_amount(self):
         response = self.client.post(reverse('info:medicine_restock_ajax'), {
