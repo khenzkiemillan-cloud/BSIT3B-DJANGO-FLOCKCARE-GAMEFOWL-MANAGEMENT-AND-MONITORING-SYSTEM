@@ -2,14 +2,12 @@ from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
 
-from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, DecimalField, F, Q, Sum
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
-from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
 from apps.core.scoping import scoped_flock_member, scoped_flock_members
@@ -116,28 +114,6 @@ def _sync_latest_weight(bird):
     bird.weight_grams = latest.weight_grams if latest else None
     bird.save(update_fields=['weight_grams'])
     return bird.weight_grams
-
-
-def _clean_int(value, default=0):
-    """Parse a spreadsheet cell into a non-negative integer."""
-    if value is None or str(value).strip() == '':
-        return default
-    try:
-        return max(0, int(float(str(value).strip())))
-    except (TypeError, ValueError, OverflowError):
-        return default
-
-
-def _choice_value(value, choices, default):
-    """Map a spreadsheet cell onto a model choice value (case-insensitive)."""
-    raw = (value or '').strip()
-    if not raw:
-        return default
-    lowered = raw.lower()
-    for choice_value, choice_label in choices:
-        if lowered in (choice_value.lower(), str(choice_label).lower()):
-            return choice_value
-    return default
 
 
 @login_required(login_url='login')

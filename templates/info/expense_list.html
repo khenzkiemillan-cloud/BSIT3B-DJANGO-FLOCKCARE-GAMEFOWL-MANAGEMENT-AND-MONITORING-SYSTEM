@@ -44,7 +44,7 @@
     <div class="dh-mini-stat">
       <span class="dh-mini-stat-icon is-info"><i class="fas fa-dove"></i></span>
       <div class="min-w-0">
-        <span class="dh-mini-stat-label">Flock members</span>
+        <span class="dh-mini-stat-label">Birds with expenses</span>
         <span class="dh-mini-stat-value">{{ counts.flock_count }}</span>
       </div>
     </div>
@@ -138,7 +138,7 @@
               <span class="text-muted">Unassigned</span>
               {% endif %}
             </td>
-            <td data-label="Category"><span class="badge bg-blue-lt text-blue">{{ expense.category }}</span></td>
+            <td data-label="Category"><span class="badge bg-blue-lt text-blue">{{ expense.get_category_display }}</span></td>
             <td class="text-end fw-semibold text-danger" data-label="Amount">₱{{ expense.amount|floatformat:2 }}</td>
             <td data-label="Actions">
               <div class="dh-row-actions">

@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from apps.info.models import (
     Breed, FlockMember, Medicine, HealthRecord,
-    FightRecord, WeightLog, BreedingPen, ClutchRecord
+    FightRecord, WeightLog, BreedingPen, ClutchRecord, Expense
 )
 from apps.users.models import UserProfile
 
@@ -14,7 +14,7 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = 'Seeds realistic gamefowl flock, medicine, health, breeding, and fight records.'
+    help = 'Seeds realistic gamefowl flock, medicine, health, breeding, expense, and fight records.'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -522,7 +522,21 @@ class Command(BaseCommand):
                 },
             ]
 
+            medicine_costs = {
+                'Newcastle Disease Vaccine (LaSota Strain)': Decimal('1.20'),
+                'Fowl Pox Vaccine with Diluent': Decimal('2.00'),
+                'Ivermectin 1% Injectable Solution': Decimal('4.50'),
+                'Albendazole Oral Suspension (Dewormer)': Decimal('6.00'),
+                'Belamyl B-Complex + Liver Extract (B12)': Decimal('3.00'),
+                'Enrofloxacin 10% Oral Solution': Decimal('8.00'),
+                'Amoxicillin Trihydrate 20% Water Soluble Powder': Decimal('2.50'),
+                'Reload Plus Oral Energy Drops': Decimal('12.00'),
+                'Terramycin Aerosol Wound Spray (Gentian Violet)': Decimal('1.75'),
+                'Ketoprofen Anti-inflammatory Solution': Decimal('5.50'),
+            }
+
             for m_cfg in medicines_data:
+                m_cfg['unit_cost'] = medicine_costs.get(m_cfg['name'], Decimal('0.00'))
                 Medicine.objects.update_or_create(
                     user=user,
                     name=m_cfg['name'],
@@ -593,7 +607,100 @@ class Command(BaseCommand):
 
             self.stdout.write(self.style.SUCCESS(f"  -> Created/Updated {len(health_records_data)} health schedule items."))
 
-            # 7. Breeding Pens & Clutches
+            # 7. Flock Expenses
+            expense_data = [
+                {
+                    'bird': saved_birds.get('SW-101'),
+                    'category': 'Feed',
+                    'amount': Decimal('2450.00'),
+                    'date': today - timedelta(days=2),
+                    'description': 'Premium gamefowl feed - 2 sacks',
+                    'notes': 'Starter and conditioning pellets from the local mill.',
+                },
+                {
+                    'bird': saved_birds.get('SW-101'),
+                    'category': 'Entry Fee',
+                    'amount': Decimal('3500.00'),
+                    'date': today - timedelta(days=14),
+                    'description': 'Mid-Season 5-Cock Masters entry fee',
+                },
+                {
+                    'bird': saved_birds.get('YLH-202'),
+                    'category': 'Medicine',
+                    'amount': Decimal('850.00'),
+                    'date': today - timedelta(days=30),
+                    'description': 'Newcastle and fowl pox vaccines',
+                },
+                {
+                    'bird': saved_birds.get('YLH-202'),
+                    'category': 'Feed',
+                    'amount': Decimal('1820.00'),
+                    'date': today - timedelta(days=7),
+                    'description': 'Mixed grains and vitamin supplements',
+                },
+                {
+                    'bird': saved_birds.get('RH-303'),
+                    'category': 'Equipment',
+                    'amount': Decimal('1250.00'),
+                    'date': today - timedelta(days=45),
+                    'description': 'New feeding troughs and waterers',
+                },
+                {
+                    'bird': saved_birds.get('KL-404'),
+                    'category': 'Transport',
+                    'amount': Decimal('900.00'),
+                    'date': today - timedelta(days=40),
+                    'description': 'Van rental to Luzon 7-Cock Championship',
+                },
+                {
+                    'bird': saved_birds.get('GR-606'),
+                    'category': 'Labor',
+                    'amount': Decimal('1500.00'),
+                    'date': today - timedelta(days=5),
+                    'description': 'Handler fee for sparring session',
+                },
+                {
+                    'bird': saved_birds.get('ALB-505'),
+                    'category': 'Utilities',
+                    'amount': Decimal('640.00'),
+                    'date': today - timedelta(days=10),
+                    'description': 'Brooder electricity share',
+                },
+                {
+                    'bird': saved_birds.get('SW-HEN-01'),
+                    'category': 'Feed',
+                    'amount': Decimal('980.00'),
+                    'date': today - timedelta(days=20),
+                    'description': 'Breeder hen layer pellets',
+                },
+                {
+                    'bird': saved_birds.get('RET-999'),
+                    'category': 'Other',
+                    'amount': Decimal('450.00'),
+                    'date': today - timedelta(days=60),
+                    'description': 'Retirement pen bedding and maintenance',
+                },
+            ]
+
+            seeded_expenses = 0
+            for e_cfg in expense_data:
+                if e_cfg['bird']:
+                    _, created = Expense.objects.get_or_create(
+                        user=user,
+                        bird=e_cfg['bird'],
+                        description=e_cfg['description'],
+                        date=e_cfg['date'],
+                        defaults={
+                            'category': e_cfg['category'],
+                            'amount': e_cfg['amount'],
+                            'notes': e_cfg.get('notes', ''),
+                        },
+                    )
+                    seeded_expenses += int(created)
+
+            self.stdout.write(self.style.SUCCESS(f"  -> Ensured {seeded_expenses} new flock expenses."))
+
+            # 8. Breeding Pens & Clutches
             sw_cock = saved_birds.get('SW-101')
             sw_hen = saved_birds.get('SW-HEN-01')
             if sw_cock and sw_hen:

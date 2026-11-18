@@ -1,7 +1,7 @@
-FlockCare — Gamefowl Management & Monitoring System
+# FlockCare — Gamefowl Management & Monitoring System
 
 Django application for tracking gamefowl flock members, health schedules,
-fight records, breeding pens, and medicines.
+fight and weight records, breeding pens, medicines, and flock expenses.
 
 ## Requirements
 
@@ -87,7 +87,17 @@ python manage.py test
 ```
 
 Tests automatically use an in-memory SQLite database.
-=======
+
+## Implementation status
+
+The current build covers flock profiling, health and vaccination schedules,
+medicine cabinet inventory, breeding and pedigree records, fight and weight
+logs, and per-flock-member expense tracking. The earlier conditioning tracker
+and the separate finance/sales pages were retired in favor of the expense
+tracker.
+
+## Concept paper
+
 BSIT Class Project Concept Paper
 
 FLOCKCARE: DEVELOPMENT OF A WEB-BASED GAMEFOWL
