@@ -102,7 +102,7 @@ class Command(BaseCommand):
                     'tag_number': 'YLH-202',
                     'breed': breeds['Yellow Legged Hatch'],
                     'gender': 'Cock',
-                    'status': 'Conditioning',
+                    'status': 'Active',
                     'birth_date': today - timedelta(days=520),
                     'comb_type': 'Straight',
                     'leg_color': 'Yellow',
@@ -119,7 +119,7 @@ class Command(BaseCommand):
                     'tag_number': 'RH-303',
                     'breed': breeds['Boston Roundhead'],
                     'gender': 'Stag',
-                    'status': 'Conditioning',
+                    'status': 'Active',
                     'birth_date': today - timedelta(days=320),
                     'comb_type': 'Pea',
                     'leg_color': 'White',
@@ -170,7 +170,7 @@ class Command(BaseCommand):
                     'tag_number': 'GR-606',
                     'breed': breeds['Regular Grey'],
                     'gender': 'Stag',
-                    'status': 'Conditioning',
+                    'status': 'Active',
                     'birth_date': today - timedelta(days=290),
                     'comb_type': 'Pea',
                     'leg_color': 'Lead',
@@ -404,7 +404,7 @@ class Command(BaseCommand):
                     }
                 )
 
-            # 4. Daily Conditioning Weight Logs (Last 7 days)
+            # 4. Daily Weight Logs (Last 7 days)
             cond_birds = [saved_birds.get('YLH-202'), saved_birds.get('RH-303'), saved_birds.get('GR-606')]
             for bird in cond_birds:
                 if not bird:
@@ -425,7 +425,7 @@ class Command(BaseCommand):
                         bird=bird,
                         date=log_date,
                         time_of_day='evening',
-                        defaults={'weight_grams': evening_w, 'notes': 'Post conditioning grain mix 40g'}
+                        defaults={'weight_grams': evening_w, 'notes': 'Post workout grain mix 40g'}
                     )
 
             # 5. Medicine Cabinet Inventory
@@ -555,7 +555,7 @@ class Command(BaseCommand):
                     'title': 'Belamyl B-Complex 0.5ml Injection',
                     'date_administered': today - timedelta(days=7),
                     'next_due_date': today + timedelta(days=3),  # Due in 3 days
-                    'notes': 'Conditioning supplement on breast muscle.',
+                    'notes': 'Vitamin supplement on breast muscle.',
                 },
                 {
                     'bird': saved_birds.get('SW-101'),

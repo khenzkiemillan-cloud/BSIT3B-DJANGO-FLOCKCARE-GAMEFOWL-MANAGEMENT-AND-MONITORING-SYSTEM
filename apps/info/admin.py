@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Breed, FlockMember, HealthRecord, Medicine, FightRecord, WeightLog,
-    BreedingPen, ClutchRecord, ConditioningSession, FinancialEntry, FlockSale,
+    BreedingPen, ClutchRecord, Expense,
 )
 
 
@@ -20,7 +20,7 @@ class FlockMemberAdmin(admin.ModelAdmin):
 
 @admin.register(Medicine)
 class MedicineAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'stock_quantity', 'unit', 'low_stock_threshold', 'expiration_date', 'user')
+    list_display = ('name', 'category', 'stock_quantity', 'unit', 'unit_cost', 'low_stock_threshold', 'expiration_date', 'user')
     list_filter = ('category', 'unit')
     search_fields = ('name', 'notes')
 
@@ -46,13 +46,6 @@ class WeightLogAdmin(admin.ModelAdmin):
     search_fields = ('bird__tag_number',)
 
 
-@admin.register(ConditioningSession)
-class ConditioningSessionAdmin(admin.ModelAdmin):
-    list_display = ('bird', 'title', 'phase', 'session_type', 'scheduled_date', 'status')
-    list_filter = ('phase', 'session_type', 'status', 'scheduled_date')
-    search_fields = ('bird__tag_number', 'title', 'notes')
-
-
 @admin.register(BreedingPen)
 class BreedingPenAdmin(admin.ModelAdmin):
     list_display = ('pen_number', 'sire', 'dam', 'date_paired', 'status', 'user')
@@ -66,15 +59,8 @@ class ClutchRecordAdmin(admin.ModelAdmin):
     list_filter = ('date_started', 'hatch_date')
 
 
-@admin.register(FinancialEntry)
-class FinancialEntryAdmin(admin.ModelAdmin):
-    list_display = ('date', 'entry_type', 'category', 'amount', 'description', 'bird', 'user')
-    list_filter = ('entry_type', 'category', 'date')
+@admin.register(Expense)
+class ExpenseAdmin(admin.ModelAdmin):
+    list_display = ('date', 'bird', 'category', 'amount', 'description', 'user')
+    list_filter = ('category', 'date')
     search_fields = ('description', 'notes', 'bird__tag_number')
-
-
-@admin.register(FlockSale)
-class FlockSaleAdmin(admin.ModelAdmin):
-    list_display = ('sale_date', 'bird', 'buyer_name', 'amount', 'financial_entry', 'user')
-    list_filter = ('sale_date',)
-    search_fields = ('buyer_name', 'buyer_contact', 'bird__tag_number', 'notes')

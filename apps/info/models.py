@@ -1,8 +1,5 @@
-from datetime import timedelta
-
 from django.db import models
 from django.contrib.auth.models import User
-from django.utils import timezone
 
 
 class Breed(models.Model):
@@ -18,7 +15,6 @@ class Breed(models.Model):
 class FlockMember(models.Model):
     STATUS_CHOICES = [
         ('Active', 'Active'),
-        ('Conditioning', 'Conditioning'),
         ('Broodcock', 'Broodcock'),
         ('Broodhen', 'Broodhen'),
         ('Retired', 'Retired'),
@@ -50,13 +46,6 @@ class FlockMember(models.Model):
         ('Other', 'Other'),
     ]
 
-    CONDITIONING_PHASES = [
-        ('foundation', 'Foundation / Rest'),
-        ('workout', 'Roadwork & Exercise'),
-        ('sparring', 'Sparring / Live Work'),
-        ('peak', 'Peak / Fight Prep'),
-    ]
-
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='flock_members')
     tag_number = models.CharField(max_length=50)
     breed = models.ForeignKey(Breed, on_delete=models.SET_NULL, null=True, blank=True, related_name='birds')
@@ -79,19 +68,6 @@ class FlockMember(models.Model):
     losses = models.PositiveIntegerField(default=0, blank=True)
     draws = models.PositiveIntegerField(default=0, blank=True)
 
-    # Conditioning requirements
-    conditioning_start_date = models.DateField(null=True, blank=True, help_text="Date the bird entered conditioning")
-    target_weight_grams = models.PositiveIntegerField(null=True, blank=True, help_text="Target fight weight in grams")
-    conditioning_program = models.CharField(max_length=100, blank=True, help_text="Conditioning regimen (e.g. Roadwork, Sparring)")
-    conditioning_feed_plan = models.CharField(max_length=255, blank=True, help_text="Feed / diet plan during conditioning")
-    conditioning_phase = models.CharField(
-        max_length=20, choices=CONDITIONING_PHASES, default='foundation', blank=True,
-        help_text="Current phase of the conditioning program",
-    )
-    conditioning_target_date = models.DateField(
-        null=True, blank=True, help_text="Target derby or fight date"
-    )
-    conditioning_notes = models.TextField(blank=True, help_text="Notes for the current conditioning program")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -111,114 +87,6 @@ class FlockMember(models.Model):
     def total_fights(self):
         return self.wins + self.losses + self.draws
 
-    @property
-    def win_rate(self):
-        if self.total_fights:
-            return round((self.wins / self.total_fights) * 100)
-        return 0
-
-    @property
-    def conditioning_days(self):
-        """Number of days since the bird entered conditioning."""
-        if not self.conditioning_start_date:
-            return 0
-        return max((timezone.localdate() - self.conditioning_start_date).days, 0)
-
-    @property
-    def weight_to_target(self):
-        """Grams still needed to reach the target weight (negative if over)."""
-        if self.weight_grams is None or self.target_weight_grams is None:
-            return None
-        return self.target_weight_grams - self.weight_grams
-
-    @property
-    def conditioning_baseline_weight(self):
-        """First weight recorded since conditioning started."""
-        if not self.pk:
-            return self.weight_grams
-        logs = self.weight_logs.all()
-        if self.conditioning_start_date:
-            logs = logs.filter(date__gte=self.conditioning_start_date)
-        first_log = logs.order_by('date', 'created_at').first()
-        return first_log.weight_grams if first_log else self.weight_grams
-
-    @property
-    def conditioning_progress_pct(self):
-        """Percent of the weight gap closed since the conditioning baseline."""
-        baseline = self.conditioning_baseline_weight
-        target = self.target_weight_grams
-        current = self.weight_grams
-        if baseline is None or target is None or current is None:
-            return None
-        if baseline == target:
-            return 100 if current == target else 0
-        progress = (current - baseline) / (target - baseline) * 100
-        return max(0, min(100, round(progress)))
-
-
-class ConditioningSession(models.Model):
-    """One scheduled workout, rest day, or checkpoint in a conditioning plan."""
-
-    PHASE_CHOICES = FlockMember.CONDITIONING_PHASES
-    SESSION_TYPES = [
-        ('weigh_in', 'Weigh-in'),
-        ('roadwork', 'Roadwork'),
-        ('sparring', 'Sparring'),
-        ('feed_control', 'Feed control'),
-        ('free_range', 'Free range'),
-        ('cage_rest', 'Cage rest'),
-        ('water_work', 'Water work'),
-        ('other', 'Other'),
-    ]
-    STATUS_CHOICES = [
-        ('planned', 'Planned'),
-        ('completed', 'Completed'),
-        ('skipped', 'Skipped'),
-    ]
-
-    bird = models.ForeignKey(
-        FlockMember, on_delete=models.CASCADE, related_name='conditioning_sessions'
-    )
-    phase = models.CharField(max_length=20, choices=PHASE_CHOICES, default='foundation')
-    session_type = models.CharField(max_length=20, choices=SESSION_TYPES, default='weigh_in')
-    title = models.CharField(max_length=120)
-    scheduled_date = models.DateField()
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='planned')
-    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
-    notes = models.TextField(blank=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['scheduled_date', 'created_at']
-        indexes = [
-            models.Index(fields=['bird', 'scheduled_date']),
-            models.Index(fields=['bird', 'status']),
-        ]
-
-    def __str__(self):
-        return f"{self.bird.tag_number} - {self.title} ({self.scheduled_date})"
-
-    @property
-    def is_overdue(self):
-        return self.status == 'planned' and self.scheduled_date < timezone.localdate()
-
-
-def conditioning_session_counts(user, today=None):
-    """Return planned conditioning session counts for one user's flock."""
-    today = today or timezone.localdate()
-    planned = ConditioningSession.objects.filter(
-        bird__user=user, bird__status='Conditioning', status='planned',
-    )
-    return {
-        'overdue': planned.filter(scheduled_date__lt=today).count(),
-        'due_today': planned.filter(scheduled_date=today).count(),
-        'upcoming': planned.filter(
-            scheduled_date__gt=today,
-            scheduled_date__lte=today + timedelta(days=7),
-        ).count(),
-    }
-
 
 class Medicine(models.Model):
     CATEGORY_CHOICES = [
@@ -236,6 +104,10 @@ class Medicine(models.Model):
     unit = models.CharField(max_length=20, default='ml')
     stock_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     low_stock_threshold = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    unit_cost = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0, blank=True,
+        help_text='Cost per unit in Philippine pesos.',
+    )
     expiration_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -248,6 +120,11 @@ class Medicine(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.stock_quantity} {self.unit})"
+
+    @property
+    def total_value(self):
+        """Current stock value based on the per-unit cost."""
+        return (self.stock_quantity or 0) * (self.unit_cost or 0)
 
 
 class HealthRecord(models.Model):
@@ -396,15 +273,10 @@ class ClutchRecord(models.Model):
         return 0.0
 
 
-class FinancialEntry(models.Model):
-    TYPE_EXPENSE = 'expense'
-    TYPE_INCOME = 'income'
-    TYPE_CHOICES = [
-        (TYPE_EXPENSE, 'Expense'),
-        (TYPE_INCOME, 'Income'),
-    ]
+class Expense(models.Model):
+    """An expense recorded against one of the user's flock members."""
 
-    EXPENSE_CATEGORIES = [
+    CATEGORY_CHOICES = [
         ('Feed', 'Feed & Supplements'),
         ('Medicine', 'Medicine & Health'),
         ('Equipment', 'Equipment & Supplies'),
@@ -414,21 +286,13 @@ class FinancialEntry(models.Model):
         ('Utilities', 'Utilities'),
         ('Other', 'Other Expense'),
     ]
-    INCOME_CATEGORIES = [
-        ('Bird Sale', 'Bird Sale'),
-        ('Prize Money', 'Prize Money'),
-        ('Stud Fee', 'Stud Fee'),
-        ('Other', 'Other Income'),
-    ]
-    CATEGORY_CHOICES = EXPENSE_CATEGORIES + INCOME_CATEGORIES
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='financial_entries')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='expenses')
     bird = models.ForeignKey(
         'FlockMember', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='financial_entries',
-        help_text='Optional flock member related to this entry (e.g. bird sale, treatment cost, entry fee).'
+        related_name='expenses',
+        help_text='Flock member this expense belongs to.',
     )
-    entry_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=TYPE_EXPENSE)
     category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='Feed')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     date = models.DateField()
@@ -439,42 +303,9 @@ class FinancialEntry(models.Model):
     class Meta:
         ordering = ['-date', '-created_at']
         indexes = [
-            models.Index(fields=['user', 'date']),
-            models.Index(fields=['user', 'entry_type']),
+            models.Index(fields=['user', 'date'], name='info_expense_user_date_idx'),
+            models.Index(fields=['user', 'bird'], name='info_expense_user_bird_idx'),
         ]
 
     def __str__(self):
-        sign = '-' if self.entry_type == self.TYPE_EXPENSE else '+'
-        return f"{sign}{self.amount} - {self.description}"
-
-
-class FlockSale(models.Model):
-    """A bird sold out of the flock, synced with the financial tracker."""
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='flock_sales')
-    bird = models.ForeignKey(
-        FlockMember, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='sales', help_text='Flock member that was sold.',
-    )
-    buyer_name = models.CharField(max_length=150)
-    buyer_contact = models.CharField(
-        max_length=100, blank=True, help_text='Phone, email, or address of the buyer',
-    )
-    sale_date = models.DateField()
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    notes = models.TextField(blank=True)
-    financial_entry = models.OneToOneField(
-        FinancialEntry, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='flock_sale', help_text='Income entry generated for this sale.',
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-sale_date', '-created_at']
-        indexes = [
-            models.Index(fields=['user', 'sale_date']),
-        ]
-
-    def __str__(self):
-        tag = self.bird.tag_number if self.bird_id else 'Unknown bird'
-        return f'{tag} sold to {self.buyer_name} ({self.amount})'
+        return f"{self.amount} - {self.description}"

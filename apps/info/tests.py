@@ -7,8 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
-    Breed, FlockMember, HealthRecord, Medicine, WeightLog, ConditioningSession,
-    FinancialEntry, FlockSale,
+    Breed, FlockMember, HealthRecord, Medicine, WeightLog, Expense,
 )
 
 
@@ -69,22 +68,25 @@ class DashboardTests(FlockTestCase):
 
         self.assertEqual(response.context['total_draws'], 2)
         self.assertEqual(response.context['total_fights'], 6)
-        self.assertEqual(response.context['win_rate'], 50)
         self.assertContains(response, 'Draws')
 
-    def test_dashboard_surfaces_overdue_conditioning_sessions(self):
-        self.bird.status = 'Conditioning'
-        self.bird.save(update_fields=['status'])
-        ConditioningSession.objects.create(
+    def test_dashboard_summarizes_flock_expenses(self):
+        Expense.objects.create(
+            user=self.user,
             bird=self.bird,
-            title='Missed roadwork',
-            scheduled_date=timezone.localdate() - timedelta(days=1),
+            category='Feed',
+            amount=Decimal('1250.00'),
+            date=timezone.localdate(),
+            description='Weekly feed',
         )
 
         response = self.client.get(reverse('dashboard'))
 
-        self.assertEqual(response.context['conditioning_overdue_sessions'], 1)
-        self.assertContains(response, 'session overdue')
+        self.assertEqual(response.context['expense_total'], Decimal('1250.00'))
+        self.assertEqual(response.context['expense_month'], Decimal('1250.00'))
+        self.assertEqual(response.context['expense_count'], 1)
+        self.assertEqual(response.context['expense_flock_count'], 1)
+        self.assertContains(response, 'Expense summary')
 
 
 class FlockMemberPageTests(FlockTestCase):
@@ -102,7 +104,7 @@ class FlockMemberPageTests(FlockTestCase):
             user=self.user,
             tag_number='H-002',
             gender='Hen',
-            status='Conditioning',
+            status='Active',
         )
 
         response = self.client.get(reverse('info:info_list'), {'q': 'Kelso'})
@@ -124,17 +126,13 @@ class FlockMemberAjaxTests(FlockTestCase):
             'tag_number': 'K-003',
             'breed': self.breed.pk,
             'gender': 'Stag',
-            'status': 'Conditioning',
+            'status': 'Active',
             'birth_date': '2026-01-15',
             'weight_grams': '1850',
             'wins': '2',
             'losses': '0',
             'sire': 'K-001',
             'dam': '',
-            'conditioning_start_date': '2026-02-01',
-            'target_weight_grams': '2200',
-            'conditioning_program': 'Roadwork',
-            'conditioning_feed_plan': 'High-protein mix, twice daily',
         })
 
         self.assertEqual(response.status_code, 200)
@@ -142,83 +140,6 @@ class FlockMemberAjaxTests(FlockTestCase):
         self.assertEqual(member.breed, self.breed)
         self.assertEqual(member.weight_grams, 1850)
         self.assertEqual(member.wins, 2)
-        self.assertEqual(member.target_weight_grams, 2200)
-        self.assertEqual(member.conditioning_program, 'Roadwork')
-
-    def test_custom_feed_plan_is_saved_from_member_form(self):
-        response = self.client.post(reverse('info:info_save_ajax'), {
-            'tag_number': 'K-007',
-            'gender': 'Stag',
-            'status': 'Conditioning',
-            'wins': '0',
-            'losses': '0',
-            'draws': '0',
-            'conditioning_start_date': '2026-02-01',
-            'target_weight_grams': '2200',
-            'conditioning_program': 'Roadwork',
-            'conditioning_feed_plan': 'Custom',
-            'conditioning_feed_plan_custom': 'Farm mix with coconut oil',
-        })
-
-        self.assertEqual(response.status_code, 200)
-        member = FlockMember.objects.get(user=self.user, tag_number='K-007')
-        self.assertEqual(member.conditioning_feed_plan, 'Farm mix with coconut oil')
-
-    def test_custom_feed_plan_requires_a_name(self):
-        response = self.client.post(reverse('info:info_save_ajax'), {
-            'tag_number': 'K-008',
-            'gender': 'Stag',
-            'status': 'Conditioning',
-            'wins': '0',
-            'losses': '0',
-            'draws': '0',
-            'conditioning_start_date': '2026-02-01',
-            'target_weight_grams': '2200',
-            'conditioning_program': 'Roadwork',
-            'conditioning_feed_plan': 'Custom',
-            'conditioning_feed_plan_custom': '',
-        })
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('conditioning_feed_plan_custom', response.json()['errors'])
-        self.assertFalse(FlockMember.objects.filter(user=self.user, tag_number='K-008').exists())
-
-    def test_conditioning_status_requires_conditioning_details(self):
-        response = self.client.post(reverse('info:info_save_ajax'), {
-            'tag_number': 'K-005',
-            'gender': 'Stag',
-            'status': 'Conditioning',
-            'wins': '0',
-            'losses': '0',
-            'draws': '0',
-        })
-
-        self.assertEqual(response.status_code, 400)
-        errors = response.json()['errors']
-        for field_name in (
-            'conditioning_start_date',
-            'target_weight_grams',
-            'conditioning_program',
-            'conditioning_feed_plan',
-        ):
-            self.assertIn(field_name, errors)
-        self.assertFalse(FlockMember.objects.filter(user=self.user, tag_number='K-005').exists())
-
-    def test_active_status_does_not_require_conditioning_details(self):
-        response = self.client.post(reverse('info:info_save_ajax'), {
-            'tag_number': 'K-006',
-            'gender': 'Hen',
-            'status': 'Active',
-            'wins': '0',
-            'losses': '0',
-            'draws': '0',
-        })
-
-        self.assertEqual(response.status_code, 200)
-        member = FlockMember.objects.get(user=self.user, tag_number='K-006')
-        self.assertIsNone(member.conditioning_start_date)
-        self.assertIsNone(member.target_weight_grams)
-        self.assertEqual(member.conditioning_program, '')
 
     def test_duplicate_tag_number_is_rejected(self):
         response = self.client.post(reverse('info:info_save_ajax'), {
@@ -772,7 +693,7 @@ class FlockListAjaxTests(FlockTestCase):
             user=self.user,
             tag_number='H-777',
             gender='Hen',
-            status='Conditioning',
+            status='Retired',
         )
 
         response = self.client.get(
@@ -912,308 +833,10 @@ class WeightLogTests(FlockTestCase):
         self.assertEqual(self.bird.weight_grams, 1950)
 
 
-class ConditioningQuickFormTests(FlockTestCase):
-    def test_quick_form_puts_bird_in_conditioning(self):
-        response = self.client.post(reverse('info:conditioning_save_ajax'), {
-            'bird_id': self.bird.pk,
-            'conditioning_start_date': '2026-11-15',
-            'target_weight_grams': '2150',
-            'conditioning_program': 'Roadwork',
-            'conditioning_feed_plan': 'High-protein mix, twice daily',
-            'weight_grams': '2000',
-        })
-
-        self.assertEqual(response.status_code, 200)
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.status, 'Conditioning')
-        self.assertEqual(self.bird.conditioning_program, 'Roadwork')
-        self.assertEqual(self.bird.target_weight_grams, 2150)
-        self.assertEqual(self.bird.weight_grams, 2000)
-
-    def test_custom_program_requires_a_name(self):
-        response = self.client.post(reverse('info:conditioning_save_ajax'), {
-            'bird_id': self.bird.pk,
-            'conditioning_start_date': '2026-11-15',
-            'target_weight_grams': '2150',
-            'conditioning_program': 'Custom',
-            'conditioning_program_custom': '',
-            'conditioning_feed_plan': 'High-protein mix, twice daily',
-        })
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('conditioning_program_custom', response.json()['errors'])
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.status, 'Active')
-
-    def test_custom_program_name_is_saved(self):
-        response = self.client.post(reverse('info:conditioning_save_ajax'), {
-            'bird_id': self.bird.pk,
-            'conditioning_start_date': '2026-11-15',
-            'target_weight_grams': '2150',
-            'conditioning_program': 'Custom',
-            'conditioning_program_custom': 'Beach roadwork',
-            'conditioning_feed_plan': 'High-protein mix, twice daily',
-        })
-
-        self.assertEqual(response.status_code, 200)
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.conditioning_program, 'Beach roadwork')
-
-    def test_custom_feed_plan_name_is_saved(self):
-        response = self.client.post(reverse('info:conditioning_save_ajax'), {
-            'bird_id': self.bird.pk,
-            'conditioning_start_date': '2026-11-15',
-            'target_weight_grams': '2150',
-            'conditioning_program': 'Roadwork',
-            'conditioning_feed_plan': 'Custom',
-            'conditioning_feed_plan_custom': 'Farm blend with copra meal',
-        })
-
-        self.assertEqual(response.status_code, 200)
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.conditioning_feed_plan, 'Farm blend with copra meal')
-
-    def test_custom_feed_plan_requires_a_name(self):
-        response = self.client.post(reverse('info:conditioning_save_ajax'), {
-            'bird_id': self.bird.pk,
-            'conditioning_start_date': '2026-11-15',
-            'target_weight_grams': '2150',
-            'conditioning_program': 'Roadwork',
-            'conditioning_feed_plan': 'Custom',
-            'conditioning_feed_plan_custom': '',
-        })
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('conditioning_feed_plan_custom', response.json()['errors'])
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.status, 'Active')
-
-    def test_missing_bird_returns_400(self):
-        response = self.client.post(reverse('info:conditioning_save_ajax'), {
-            'conditioning_start_date': '2026-11-15',
-            'target_weight_grams': '2150',
-            'conditioning_program': 'Roadwork',
-            'conditioning_feed_plan': 'High-protein mix, twice daily',
-        })
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('error', response.json())
-
-    def test_cannot_condition_another_users_bird(self):
-        other = get_user_model().objects.create_user(
-            username='other-owner', password='test-password'
-        )
-        other_bird = FlockMember.objects.create(
-            user=other,
-            tag_number='OTHER-001',
-            gender='Stag',
-            status='Active',
-        )
-
-        response = self.client.post(reverse('info:conditioning_save_ajax'), {
-            'bird_id': other_bird.pk,
-            'conditioning_start_date': '2026-11-15',
-            'target_weight_grams': '2150',
-            'conditioning_program': 'Roadwork',
-            'conditioning_feed_plan': 'High-protein mix, twice daily',
-        })
-
-        self.assertEqual(response.status_code, 404)
-        other_bird.refresh_from_db()
-        self.assertEqual(other_bird.status, 'Active')
-
-
-class ConditioningWorkflowTests(FlockTestCase):
-    def start_conditioning(self, **overrides):
-        data = {
-            'bird_id': self.bird.pk,
-            'conditioning_start_date': '2026-11-15',
-            'target_weight_grams': '2150',
-            'conditioning_program': 'Roadwork',
-            'conditioning_feed_plan': 'High-protein mix, twice daily',
-        }
-        data.update(overrides)
-        return self.client.post(reverse('info:conditioning_save_ajax'), data)
-
-    def test_starting_weight_is_saved_as_a_log(self):
-        response = self.start_conditioning(weight_grams='2000')
-
-        self.assertEqual(response.status_code, 200)
-        log = self.bird.weight_logs.get()
-        self.assertEqual(log.weight_grams, 2000)
-        self.assertIn('conditioning start', log.notes.lower())
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.weight_grams, 2000)
-
-    def test_deleting_a_newer_log_does_not_erase_starting_weight(self):
-        self.start_conditioning(weight_grams='2000')
-        newer_log = WeightLog.objects.create(
-            bird=self.bird,
-            date=timezone.localdate(),
-            time_of_day='morning',
-            weight_grams=1980,
-        )
-
-        response = self.client.post(
-            reverse('info:weight_log_delete_ajax', args=[newer_log.pk])
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.weight_grams, 2000)
-
-    def test_standard_session_plan_is_seeded(self):
-        response = self.start_conditioning(conditioning_target_date='2026-12-15')
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['sessions_created'], 7)
-        sessions = list(self.bird.conditioning_sessions.all())
-        self.assertEqual(len(sessions), 7)
-        self.assertEqual(sessions[-1].title, 'Pre-event rest & final check')
-        self.assertEqual(str(sessions[-1].scheduled_date), '2026-12-14')
-
-    def test_starting_again_does_not_duplicate_sessions(self):
-        self.start_conditioning()
-        response = self.start_conditioning(target_weight_grams='2100')
-
-        self.assertEqual(response.json()['sessions_created'], 0)
-        self.assertEqual(self.bird.conditioning_sessions.count(), 6)
-
-    def test_future_start_date_is_rejected(self):
-        future = timezone.localdate() + timedelta(days=2)
-        response = self.start_conditioning(conditioning_start_date=str(future))
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('conditioning_start_date', response.json()['errors'])
-
-    def test_target_date_must_follow_start_date(self):
-        response = self.start_conditioning(conditioning_target_date='2026-11-01')
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('conditioning_target_date', response.json()['errors'])
-
-    def test_unrealistic_target_weight_is_rejected(self):
-        response = self.start_conditioning(
-            weight_grams='2000', target_weight_grams='4000',
-        )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('target_weight_grams', response.json()['errors'])
-
-    def test_conditioning_dashboard_page_renders(self):
-        self.start_conditioning()
-
-        response = self.client.get(reverse('info:conditioning_list'))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'info/conditioning_list.html')
-        self.assertContains(response, 'Conditioning Workflow')
-        self.assertContains(response, 'id="quickConditioningForm"')
-        self.assertContains(response, self.bird.tag_number)
-
-    def test_conditioning_dashboard_requires_login(self):
-        self.client.logout()
-
-        response = self.client.get(reverse('info:conditioning_list'))
-
-        self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse('login'), response.url)
-
-
-class ConditioningSessionTests(FlockTestCase):
-    def setUp(self):
-        super().setUp()
-        self.client.post(reverse('info:conditioning_save_ajax'), {
-            'bird_id': self.bird.pk,
-            'conditioning_start_date': '2026-11-15',
-            'target_weight_grams': '2150',
-            'conditioning_program': 'Roadwork',
-            'conditioning_feed_plan': 'High-protein mix, twice daily',
-        })
-        self.session = self.bird.conditioning_sessions.first()
-
-    def test_session_list_returns_plan_and_progress(self):
-        response = self.client.get(
-            reverse('info:conditioning_sessions_ajax', args=[self.bird.pk])
-        )
-
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data['bird_tag'], self.bird.tag_number)
-        self.assertEqual(len(data['data']), 6)
-        self.assertEqual(data['data'][0]['title'], self.session.title)
-
-    def test_marking_session_completed_sets_completed_at(self):
-        response = self.client.post(reverse('info:conditioning_session_save_ajax'), {
-            'id': self.session.pk,
-            'bird_id': self.bird.pk,
-            'title': self.session.title,
-            'scheduled_date': str(self.session.scheduled_date),
-            'phase': self.session.phase,
-            'session_type': self.session.session_type,
-            'status': 'completed',
-        })
-
-        self.assertEqual(response.status_code, 200)
-        self.session.refresh_from_db()
-        self.assertEqual(self.session.status, 'completed')
-        self.assertIsNotNone(self.session.completed_at)
-
-    def test_session_can_be_deleted(self):
-        response = self.client.post(
-            reverse('info:conditioning_session_delete_ajax', args=[self.session.pk])
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(self.bird.conditioning_sessions.filter(pk=self.session.pk).exists())
-
-    def test_cannot_edit_another_users_session(self):
-        other = get_user_model().objects.create_user(
-            username='other-session-owner', password='test-password'
-        )
-        other_bird = FlockMember.objects.create(
-            user=other, tag_number='OTHER-002', gender='Stag', status='Conditioning',
-        )
-        other_session = ConditioningSession.objects.create(
-            bird=other_bird,
-            title='Other plan',
-            scheduled_date=timezone.localdate(),
-        )
-
-        response = self.client.post(reverse('info:conditioning_session_save_ajax'), {
-            'id': other_session.pk,
-            'bird_id': other_bird.pk,
-            'title': 'Hijacked',
-            'scheduled_date': str(other_session.scheduled_date),
-            'status': 'completed',
-        })
-
-        self.assertEqual(response.status_code, 404)
-        other_session.refresh_from_db()
-        self.assertEqual(other_session.title, 'Other plan')
-
-
 class InlineQuickFormRenderTests(FlockTestCase):
     def test_flock_page_renders_quick_member_form(self):
         response = self.client.get(reverse('info:info_list'))
         self.assertContains(response, 'id="quickMemberForm"')
-
-    def test_conditioning_page_renders_conditioning_requirements_instead_of_quick_member_form(self):
-        response = self.client.get(reverse('info:info_list'), {'status': 'Conditioning'})
-        self.assertContains(response, 'id="quickConditioningForm"')
-        self.assertNotContains(response, 'id="quickMemberForm"')
-
-    def test_conditioning_forms_render_preset_diet_plan_options(self):
-        conditioning_page = self.client.get(reverse('info:conditioning_list'))
-        self.assertContains(conditioning_page, 'id="quick_cond_feed"')
-        self.assertContains(conditioning_page, 'High-protein pellets, twice daily')
-        self.assertContains(conditioning_page, 'id="quick_cond_feed_custom"')
-
-        flock_page = self.client.get(reverse('info:info_list'), {'status': 'Conditioning'})
-        self.assertContains(flock_page, 'Booster mash with vitamins')
-        self.assertContains(flock_page, 'id="quick_cond_feed_custom"')
-        self.assertContains(flock_page, 'id="member_conditioning_feed_plan"')
-        self.assertContains(flock_page, 'id="member_conditioning_feed_plan_custom"')
 
     def test_dashboard_does_not_render_quick_member_form(self):
         response = self.client.get(reverse('dashboard'))
@@ -1310,105 +933,130 @@ class PedigreeCertificateTests(FlockTestCase):
         self.assertContains(response, self.bird.tag_number)
 
 
-class FlockSaleTests(FlockTestCase):
-    def record_sale(self, **overrides):
+class ExpenseTests(FlockTestCase):
+    def record_expense(self, **overrides):
         data = {
             'bird': self.bird.pk,
-            'buyer_name': 'Juan Dela Cruz',
-            'buyer_contact': '0917 555 0100',
-            'sale_date': str(timezone.localdate()),
-            'amount': '8500.00',
-            'notes': 'Delivered at the farm',
+            'category': 'Feed',
+            'amount': '1500.00',
+            'date': str(timezone.localdate()),
+            'description': 'Weekly gamefowl feed',
+            'notes': 'Bought from the local supplier',
         }
         data.update(overrides)
-        return self.client.post(reverse('info:sale_save_ajax'), data)
+        return self.client.post(reverse('info:expense_save_ajax'), data)
 
-    def test_record_sale_creates_income_and_marks_bird_sold(self):
-        response = self.record_sale()
-
-        self.assertEqual(response.status_code, 200)
-        sale = FlockSale.objects.get(user=self.user)
-        self.assertEqual(sale.bird, self.bird)
-        self.assertEqual(sale.amount, Decimal('8500.00'))
-        entry = sale.financial_entry
-        self.assertIsNotNone(entry)
-        self.assertEqual(entry.entry_type, FinancialEntry.TYPE_INCOME)
-        self.assertEqual(entry.category, 'Bird Sale')
-        self.assertEqual(entry.amount, sale.amount)
-        self.assertEqual(entry.bird, self.bird)
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.status, 'Sold')
-
-    def test_sales_page_lists_sales_and_totals(self):
-        self.record_sale()
-
-        response = self.client.get(reverse('info:sales_list'))
+    def test_record_expense_links_to_flock_member(self):
+        response = self.record_expense()
 
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'info/sales_list.html')
-        self.assertContains(response, 'Juan Dela Cruz')
+        expense = Expense.objects.get(user=self.user)
+        self.assertEqual(expense.bird, self.bird)
+        self.assertEqual(expense.category, 'Feed')
+        self.assertEqual(expense.amount, Decimal('1500.00'))
+        self.assertEqual(expense.description, 'Weekly gamefowl feed')
+
+    def test_expenses_page_lists_entries_and_totals(self):
+        self.record_expense()
+
+        response = self.client.get(reverse('info:expense_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'info/expense_list.html')
+        self.assertContains(response, 'Weekly gamefowl feed')
         self.assertContains(response, self.bird.tag_number)
-        self.assertEqual(response.context['total_revenue'], Decimal('8500.00'))
-        self.assertEqual(response.context['counts']['birds_sold'], 1)
+        self.assertContains(response, 'Expenses by flock member')
+        self.assertEqual(response.context['total_expenses'], Decimal('1500.00'))
+        self.assertEqual(response.context['month_expenses'], Decimal('1500.00'))
+        self.assertEqual(response.context['counts']['flock_count'], 1)
 
-    def test_sales_page_requires_login(self):
-        self.client.logout()
+    def test_expense_requires_a_flock_member(self):
+        response = self.record_expense(bird='')
 
-        response = self.client.get(reverse('info:sales_list'))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('bird', response.json()['errors'])
+        self.assertFalse(Expense.objects.exists())
 
-        self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse('login'), response.url)
+    def test_expense_page_only_shows_current_users_expenses(self):
+        other = get_user_model().objects.create_user(
+            username='other-expense-owner', password='test-password'
+        )
+        other_bird = FlockMember.objects.create(
+            user=other, tag_number='OTHER-004', gender='Stag', status='Active',
+        )
+        Expense.objects.create(
+            user=other,
+            bird=other_bird,
+            category='Medicine',
+            amount=Decimal('500.00'),
+            date=timezone.localdate(),
+            description='Other owner expense',
+        )
+        self.record_expense()
 
-    def test_update_sale_syncs_financial_entry(self):
-        self.record_sale()
-        sale = FlockSale.objects.get()
+        response = self.client.get(reverse('info:expense_list'))
 
-        response = self.client.post(reverse('info:sale_save_ajax'), {
-            'id': sale.pk,
+        self.assertContains(response, 'Weekly gamefowl feed')
+        self.assertNotContains(response, 'Other owner expense')
+        self.assertEqual(response.context['total_expenses'], Decimal('1500.00'))
+
+    def test_update_expense(self):
+        self.record_expense()
+        expense = Expense.objects.get()
+
+        response = self.client.post(reverse('info:expense_save_ajax'), {
+            'id': expense.pk,
             'bird': self.bird.pk,
-            'buyer_name': 'Maria Santos',
-            'sale_date': str(timezone.localdate()),
-            'amount': '9000.00',
+            'category': 'Medicine',
+            'amount': '750.50',
+            'date': str(timezone.localdate()),
+            'description': 'Vitamins and dewormer',
         })
 
         self.assertEqual(response.status_code, 200)
-        sale.refresh_from_db()
-        self.assertEqual(sale.buyer_name, 'Maria Santos')
-        self.assertEqual(sale.financial_entry.amount, Decimal('9000.00'))
-        self.assertEqual(FinancialEntry.objects.filter(user=self.user).count(), 1)
+        expense.refresh_from_db()
+        self.assertEqual(expense.category, 'Medicine')
+        self.assertEqual(expense.amount, Decimal('750.50'))
+        self.assertEqual(expense.description, 'Vitamins and dewormer')
+        self.assertEqual(Expense.objects.filter(user=self.user).count(), 1)
 
-    def test_delete_sale_removes_income_and_restores_bird(self):
-        self.record_sale()
-        sale = FlockSale.objects.get()
+    def test_delete_expense(self):
+        self.record_expense()
+        expense = Expense.objects.get()
 
-        response = self.client.post(reverse('info:sale_delete_ajax', args=[sale.pk]))
+        response = self.client.post(reverse('info:expense_delete_ajax', args=[expense.pk]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(FlockSale.objects.exists())
-        self.assertFalse(FinancialEntry.objects.exists())
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.status, 'Active')
+        self.assertFalse(Expense.objects.exists())
 
-    def test_cannot_sell_another_users_bird(self):
+    def test_cannot_delete_another_users_expense(self):
         other = get_user_model().objects.create_user(
-            username='other-sale-owner', password='test-password'
+            username='other-expense-deleter', password='test-password'
         )
         other_bird = FlockMember.objects.create(
-            user=other, tag_number='OTHER-003', gender='Stag', status='Active',
+            user=other, tag_number='OTHER-005', gender='Hen', status='Active',
+        )
+        expense = Expense.objects.create(
+            user=other,
+            bird=other_bird,
+            category='Feed',
+            amount=Decimal('300.00'),
+            date=timezone.localdate(),
+            description='Not your expense',
         )
 
-        response = self.record_sale(bird=other_bird.pk)
+        response = self.client.post(reverse('info:expense_delete_ajax', args=[expense.pk]))
 
-        self.assertEqual(response.status_code, 400)
-        self.assertFalse(FlockSale.objects.exists())
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Expense.objects.filter(pk=expense.pk).exists())
 
-    def test_future_sale_date_is_rejected(self):
-        future = timezone.localdate() + timedelta(days=2)
+    def test_expenses_page_requires_login(self):
+        self.client.logout()
 
-        response = self.record_sale(sale_date=str(future))
+        response = self.client.get(reverse('info:expense_list'))
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('sale_date', response.json()['errors'])
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('login'), response.url)
 
 
 class BreedQuickAddTests(FlockTestCase):

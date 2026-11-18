@@ -5,8 +5,7 @@ from functools import wraps
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db import transaction
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, DecimalField, F, Q, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -15,124 +14,20 @@ from django.views.decorators.http import require_POST
 
 from apps.core.scoping import scoped_flock_member, scoped_flock_members
 from .choices import (
-    COMMON_BREEDS, COMMON_MEDICINES, MEDICINE_UNITS, CONDITIONING_PROGRAMS,
-    CONDITIONING_FEED_PLANS, record_type_for_category,
+    COMMON_BREEDS, COMMON_MEDICINES, MEDICINE_UNITS, record_type_for_category,
 )
 from .forms import (
     FlockMemberForm, HealthRecordForm, MedicineForm,
     FightRecordForm, WeightLogForm, BreedingPenForm, ClutchRecordForm,
-    ConditioningForm, ConditioningSessionForm, FinancialEntryForm,
-    FlockSaleForm,
+    ExpenseForm,
 )
 from .models import (
     Breed, FlockMember, HealthRecord, Medicine,
-    FightRecord, WeightLog, BreedingPen, ClutchRecord, FinancialEntry,
-    ConditioningSession, FlockSale, conditioning_session_counts,
+    FightRecord, WeightLog, BreedingPen, ClutchRecord, Expense,
 )
 
 HEALTH_DUE_WINDOW_DAYS = 30
 MEDICINE_EXPIRY_WINDOW_DAYS = 30
-CONDITIONING_SESSION_TEMPLATE = [
-    (0, 'foundation', 'weigh_in', 'Baseline weigh-in & diet setup', 15,
-     'Record the starting weight and confirm the feed plan.'),
-    (3, 'foundation', 'cage_rest', 'Controlled rest & feed adjustment', None,
-     'Keep the bird calm while the body adjusts to the new ration.'),
-    (7, 'workout', 'roadwork', 'Light roadwork', 20,
-     'Short, steady roadwork. Watch breathing and recovery.'),
-    (14, 'workout', 'roadwork', 'Moderate roadwork & weigh-in', 30,
-     'Increase the workload gradually and log the weight change.'),
-    (21, 'sparring', 'sparring', 'Sparring assessment', 20,
-     'Controlled sparring to gauge timing, condition and confidence.'),
-    (28, 'peak', 'weigh_in', 'Peak weigh-in & tuning', 15,
-     'Final check before the event; adjust rest and feed as needed.'),
-]
-
-
-def _seed_conditioning_sessions(bird):
-    """Create the standard session plan once when conditioning starts."""
-    if bird.conditioning_sessions.exists():
-        return 0
-
-    start_date = bird.conditioning_start_date or timezone.localdate()
-    sessions = []
-    for offset, phase, session_type, title, duration, notes in CONDITIONING_SESSION_TEMPLATE:
-        sessions.append(ConditioningSession(
-            bird=bird,
-            phase=phase,
-            session_type=session_type,
-            title=title,
-            scheduled_date=start_date + timedelta(days=offset),
-            duration_minutes=duration,
-            notes=notes,
-        ))
-
-    target_date = bird.conditioning_target_date
-    if target_date and target_date - timedelta(days=1) > start_date:
-        sessions.append(ConditioningSession(
-            bird=bird,
-            phase='peak',
-            session_type='cage_rest',
-            title='Pre-event rest & final check',
-            scheduled_date=target_date - timedelta(days=1),
-            notes='Quiet rest, final weight check and equipment preparation.',
-        ))
-
-    ConditioningSession.objects.bulk_create(sessions)
-    return len(sessions)
-
-
-def _conditioning_bird_overview(members, today):
-    """Build the per-bird conditioning cards shown on the conditioning page."""
-    birds = []
-    all_overdue = []
-
-    queryset = members.filter(status='Conditioning').select_related('breed').prefetch_related(
-        'weight_logs', 'conditioning_sessions',
-    )
-
-    for bird in queryset:
-        sessions = list(bird.conditioning_sessions.all())
-        completed = [session for session in sessions if session.status == 'completed']
-        overdue = [session for session in sessions if session.is_overdue]
-        upcoming = [
-            session for session in sessions
-            if session.status == 'planned' and session.scheduled_date >= today
-        ]
-        all_overdue.extend(
-            {'bird': bird, 'session': session} for session in overdue
-        )
-        progress = bird.conditioning_progress_pct
-        to_target = bird.weight_to_target
-        birds.append({
-            'bird': bird,
-            'sessions': sessions,
-            'completed_count': len(completed),
-            'overdue_count': len(overdue),
-            'next_session': upcoming[0] if upcoming else None,
-            'progress': progress,
-            'progress_display': f'{progress}%' if progress is not None else '—',
-            'progress_width': progress if progress is not None else 0,
-            'to_target': to_target,
-            'to_target_display': (
-                f'{abs(to_target)} g to go' if to_target and to_target > 0
-                else f'{abs(to_target)} g over target' if to_target and to_target < 0
-                else 'On target' if to_target is not None else 'No target set'
-            ),
-        })
-
-    birds.sort(key=lambda item: (
-        -item['overdue_count'],
-        item['next_session'].scheduled_date if item['next_session'] else today + timedelta(days=3650),
-        item['bird'].tag_number,
-    ))
-
-    summary = {
-        'birds': len(birds),
-        'sessions': sum(len(item['sessions']) for item in birds),
-        'completed': sum(item['completed_count'] for item in birds),
-        'overdue': len(all_overdue),
-    }
-    return birds, all_overdue, summary
 
 
 def _form_error_message(form):
@@ -263,7 +158,6 @@ def info_list_page(request):
     counts = all_members.aggregate(
         total=Count('id'),
         active=Count('id', filter=Q(status='Active')),
-        conditioning=Count('id', filter=Q(status='Conditioning')),
         retired=Count('id', filter=Q(status='Retired')),
         sold=Count('id', filter=Q(status='Sold')),
         breeding=Count('id', filter=Q(status__in=['Broodcock', 'Broodhen'])),
@@ -306,9 +200,6 @@ def info_list_page(request):
         'members': members,
         'breeds': breeds,
         'common_breeds': COMMON_BREEDS,
-        'conditioning_programs': CONDITIONING_PROGRAMS,
-        'conditioning_feed_plans': CONDITIONING_FEED_PLANS,
-        'phases': FlockMember.CONDITIONING_PHASES,
         'bird_tags': bird_tags,
         'farm_birds': scoped_flock_members(request.user).order_by('tag_number'),
         'medicine_options': _health_medicine_options(request.user),
@@ -357,10 +248,6 @@ def info_list_ajax(request):
         'draws': bird.draws,
         'cage_number': bird.cage_number,
         'image_url': bird.image.url if bird.image else '',
-        'conditioning_start_date': str(bird.conditioning_start_date) if bird.conditioning_start_date else '',
-        'target_weight_grams': bird.target_weight_grams,
-        'conditioning_program': bird.conditioning_program or '',
-        'conditioning_feed_plan': bird.conditioning_feed_plan or '',
     } for bird in page.object_list]
     return JsonResponse({
         'data': data,
@@ -369,29 +256,6 @@ def info_list_ajax(request):
         'page': page.number,
         'pages': paginator.num_pages,
         'total': paginator.count,
-    })
-
-
-@login_required(login_url='login')
-def conditioning_list_page(request):
-    """Render the dedicated conditioning workflow dashboard."""
-    today = timezone.localdate()
-    members = scoped_flock_members(request.user)
-    birds, overdue_sessions, summary = _conditioning_bird_overview(members, today)
-    due_counts = conditioning_session_counts(request.user, today)
-
-    return render(request, 'info/conditioning_list.html', {
-        'birds': birds,
-        'overdue_sessions': overdue_sessions,
-        'summary': summary,
-        'due_counts': due_counts,
-        'today': today,
-        'farm_birds': members.order_by('tag_number'),
-        'conditioning_programs': CONDITIONING_PROGRAMS,
-        'conditioning_feed_plans': CONDITIONING_FEED_PLANS,
-        'phases': FlockMember.CONDITIONING_PHASES,
-        'session_types': ConditioningSession.SESSION_TYPES,
-        'statuses': ConditioningSession.STATUS_CHOICES,
     })
 
 
@@ -418,10 +282,6 @@ def info_get_ajax(request, pk):
         'losses': bird.losses,
         'draws': bird.draws,
         'image_url': bird.image.url if bird.image else '',
-        'conditioning_start_date': str(bird.conditioning_start_date) if bird.conditioning_start_date else '',
-        'target_weight_grams': bird.target_weight_grams,
-        'conditioning_program': bird.conditioning_program or '',
-        'conditioning_feed_plan': bird.conditioning_feed_plan or '',
     })
 
 
@@ -530,7 +390,6 @@ def fight_records_ajax(request, pk):
         'wins': bird.wins,
         'losses': bird.losses,
         'draws': bird.draws,
-        'win_rate': bird.win_rate,
         'data': data
     })
 
@@ -602,12 +461,12 @@ def fight_record_delete_ajax(request, pk):
     })
 
 
-# --- CONDITIONING & WEIGHT LOGS ---
+# --- WEIGHT LOGS ---
 
 @login_required(login_url='login')
 @_json_not_found
 def weight_logs_ajax(request, pk):
-    """Retrieve conditioning weight curve logs for a bird."""
+    """Retrieve the weight history for a bird."""
     bird = scoped_flock_member(request.user, pk)
     logs = bird.weight_logs.order_by('date', 'created_at')
     data = [{
@@ -670,152 +529,6 @@ def weight_log_delete_ajax(request, pk):
         'status': 'success',
         'message': 'Weight log deleted.',
         'weight_grams': current_weight,
-    })
-
-
-@login_required(login_url='login')
-@require_POST
-@_json_not_found
-def conditioning_save_ajax(request):
-    """Apply the conditioning requirements to an existing bird."""
-    bird_id = (request.POST.get('bird_id') or '').strip()
-    if not bird_id:
-        return JsonResponse({'error': 'Please select a bird.'}, status=400)
-    bird = scoped_flock_member(request.user, bird_id)
-
-    form = ConditioningForm(request.POST)
-    if not form.is_valid():
-        return JsonResponse(
-            {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
-            status=400,
-        )
-
-    bird.conditioning_start_date = form.cleaned_data['conditioning_start_date']
-    bird.conditioning_target_date = form.cleaned_data.get('conditioning_target_date')
-    bird.target_weight_grams = form.cleaned_data['target_weight_grams']
-    bird.conditioning_program = form.cleaned_data['conditioning_program']
-    bird.conditioning_feed_plan = form.cleaned_data['conditioning_feed_plan']
-    bird.conditioning_phase = form.cleaned_data.get('conditioning_phase') or 'foundation'
-    bird.conditioning_notes = form.cleaned_data.get('conditioning_notes') or ''
-    bird.status = 'Conditioning'
-    bird.save(update_fields=[
-        'conditioning_start_date', 'conditioning_target_date',
-        'target_weight_grams', 'conditioning_program', 'conditioning_feed_plan',
-        'conditioning_phase', 'conditioning_notes', 'status',
-    ])
-
-    # A starting weight must be stored as a log. Setting bird.weight_grams
-    # directly would be erased by the next weight-log add/delete sync.
-    weight = form.cleaned_data.get('weight_grams')
-    if weight is not None:
-        baseline = bird.weight_logs.filter(
-            date=bird.conditioning_start_date,
-            time_of_day='morning',
-            notes__icontains='conditioning start',
-        ).first()
-        if baseline:
-            baseline.weight_grams = weight
-            baseline.save(update_fields=['weight_grams'])
-        else:
-            WeightLog.objects.create(
-                bird=bird,
-                date=bird.conditioning_start_date,
-                time_of_day='morning',
-                weight_grams=weight,
-                notes='Baseline weight at conditioning start',
-            )
-        _sync_latest_weight(bird)
-
-    seeded = _seed_conditioning_sessions(bird)
-
-    return JsonResponse({
-        'status': 'success',
-        'message': f'{bird.tag_number} is now in conditioning.',
-        'sessions_created': seeded,
-    })
-
-
-@login_required(login_url='login')
-@_json_not_found
-def conditioning_sessions_ajax(request, pk):
-    """Return the session plan plus weight progress for one bird."""
-    bird = scoped_flock_member(request.user, pk)
-    sessions = bird.conditioning_sessions.all()
-    data = [{
-        'id': session.id,
-        'phase': session.phase,
-        'phase_display': session.get_phase_display(),
-        'session_type': session.session_type,
-        'type_display': session.get_session_type_display(),
-        'title': session.title,
-        'scheduled_date': str(session.scheduled_date),
-        'status': session.status,
-        'status_display': session.get_status_display(),
-        'duration_minutes': session.duration_minutes,
-        'notes': session.notes or '',
-        'is_overdue': session.is_overdue,
-    } for session in sessions]
-
-    return JsonResponse({
-        'bird_tag': bird.tag_number,
-        'status': bird.status,
-        'current_weight': bird.weight_grams,
-        'target_weight': bird.target_weight_grams,
-        'weight_to_target': bird.weight_to_target,
-        'progress': bird.conditioning_progress_pct,
-        'days_in_conditioning': bird.conditioning_days,
-        'data': data,
-    })
-
-
-@login_required(login_url='login')
-@require_POST
-@_json_not_found
-def conditioning_session_save_ajax(request):
-    """Create or update one conditioning session."""
-    session_id = (request.POST.get('id') or '').strip()
-    if session_id:
-        try:
-            session = ConditioningSession.objects.filter(
-                pk=session_id, bird__user=request.user,
-            ).first()
-        except (TypeError, ValueError):
-            session = None
-        if session is None:
-            raise Http404('Conditioning session not found.')
-    else:
-        bird_id = (request.POST.get('bird_id') or '').strip()
-        session = ConditioningSession(bird=scoped_flock_member(request.user, bird_id))
-
-    form = ConditioningSessionForm(request.POST, instance=session)
-    if not form.is_valid():
-        return JsonResponse(
-            {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
-            status=400,
-        )
-
-    session = form.save(commit=False)
-    session.completed_at = timezone.now() if session.status == 'completed' else None
-    session.save()
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Conditioning session saved.',
-        'id': session.pk,
-    })
-
-
-@login_required(login_url='login')
-@require_POST
-@_json_not_found
-def conditioning_session_delete_ajax(request, pk):
-    """Delete one conditioning session."""
-    session = ConditioningSession.objects.filter(pk=pk, bird__user=request.user).first()
-    if session is None:
-        raise Http404('Conditioning session not found.')
-    session.delete()
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Conditioning session deleted.',
     })
 
 
@@ -1072,6 +785,10 @@ def medicine_list_page(request):
             expiration_date__lte=expiry_cutoff,
         )),
         expired=Count('id', filter=Q(expiration_date__lt=today)),
+        inventory_value=Sum(
+            F('stock_quantity') * F('unit_cost'),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        ),
     )
 
     if query:
@@ -1116,6 +833,7 @@ def medicine_list_page(request):
         'state': state,
         'category': category,
         'counts': counts,
+        'inventory_value': counts.get('inventory_value') or 0,
         'today': today,
         'expiry_cutoff': expiry_cutoff,
         'expiry_window_days': MEDICINE_EXPIRY_WINDOW_DAYS,
@@ -1354,207 +1072,82 @@ def flock_batch_action_ajax(request):
     return JsonResponse({'error': 'Unknown action.'}, status=400)
 
 
-# --- EXPENSES / FINANCIAL TRACKER ---
+# --- EXPENSES ---
 
 @login_required(login_url='login')
-def finance_list_page(request):
-    """Render the expenses and income tracker with summary totals."""
-    today = timezone.localdate()
-    query = request.GET.get('q', '').strip()
-    entry_type = request.GET.get('type', '').strip()
-    category = request.GET.get('category', '').strip()
-
-    entries = FinancialEntry.objects.filter(user=request.user)
-    counts = entries.aggregate(
-        total=Count('id'),
-        expenses_count=Count('id', filter=Q(entry_type=FinancialEntry.TYPE_EXPENSE)),
-        income_count=Count('id', filter=Q(entry_type=FinancialEntry.TYPE_INCOME)),
-    )
-    totals = entries.aggregate(
-        total_expenses=Sum('amount', filter=Q(entry_type=FinancialEntry.TYPE_EXPENSE)),
-        total_income=Sum('amount', filter=Q(entry_type=FinancialEntry.TYPE_INCOME)),
-    )
-    total_expenses = totals['total_expenses'] or Decimal('0.00')
-    total_income = totals['total_income'] or Decimal('0.00')
-    net_total = total_income - total_expenses
-
-    if query:
-        entries = entries.filter(
-            Q(description__icontains=query) |
-            Q(category__icontains=query) |
-            Q(notes__icontains=query)
-        )
-
-    if entry_type in (FinancialEntry.TYPE_EXPENSE, FinancialEntry.TYPE_INCOME):
-        entries = entries.filter(entry_type=entry_type)
-    else:
-        entry_type = ''
-
-    if category:
-        entries = entries.filter(category=category)
-
-    entries = entries.select_related('bird').order_by('-date', '-created_at')
-    paginator = Paginator(entries, 15)
-    page = paginator.get_page(request.GET.get('page', 1))
-
-    if entry_type == FinancialEntry.TYPE_INCOME:
-        categories = FinancialEntry.INCOME_CATEGORIES
-    elif entry_type == FinancialEntry.TYPE_EXPENSE:
-        categories = FinancialEntry.EXPENSE_CATEGORIES
-    else:
-        categories = FinancialEntry.CATEGORY_CHOICES
-
-    return render(request, 'info/finance_list.html', {
-        'entries': page,
-        'query': query,
-        'entry_type': entry_type,
-        'category': category,
-        'categories': categories,
-        'expense_categories': FinancialEntry.EXPENSE_CATEGORIES,
-        'income_categories': FinancialEntry.INCOME_CATEGORIES,
-        'birds': scoped_flock_members(request.user).order_by('tag_number'),
-        'counts': counts,
-        'total_expenses': total_expenses,
-        'total_income': total_income,
-        'net_total': net_total,
-        'today': today,
-    })
-
-
-@login_required(login_url='login')
-@require_POST
-@_json_not_found
-def finance_save_ajax(request):
-    """Create or update a financial entry."""
-    entry_id = (request.POST.get('id') or '').strip()
-
-    if entry_id:
-        if not entry_id.isdigit():
-            raise Http404('Entry not found.')
-        entry = FinancialEntry.objects.filter(pk=entry_id, user=request.user).first()
-        if entry is None:
-            raise Http404('Entry not found.')
-    else:
-        entry = FinancialEntry(user=request.user)
-
-    form = FinancialEntryForm(request.POST, instance=entry, user=request.user)
-    if not form.is_valid():
-        return JsonResponse(
-            {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
-            status=400,
-        )
-
-    entry = form.save(commit=False)
-    entry.user = request.user
-    entry.save()
-
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Financial entry updated successfully.' if entry_id else 'Financial entry added successfully.',
-        'id': entry.pk,
-    })
-
-
-@login_required(login_url='login')
-@require_POST
-@_json_not_found
-def finance_delete_ajax(request, pk):
-    """Delete one of the user's financial entries."""
-    entry = FinancialEntry.objects.filter(pk=pk, user=request.user).first()
-    if entry is None:
-        raise Http404('Entry not found.')
-
-    entry.delete()
-    return JsonResponse({'status': 'success', 'message': 'Financial entry deleted successfully.'})
-
-
-# --- FLOCK SALES ---
-
-def _sync_sale_financial_entry(sale):
-    """Create or update the income entry that mirrors a bird sale."""
-    entry = sale.financial_entry or FinancialEntry(user=sale.user)
-    tag = sale.bird.tag_number if sale.bird_id else 'Unknown bird'
-    entry.user = sale.user
-    entry.bird = sale.bird
-    entry.entry_type = FinancialEntry.TYPE_INCOME
-    entry.category = 'Bird Sale'
-    entry.amount = sale.amount
-    entry.date = sale.sale_date
-    entry.description = f'Bird sale — {tag} to {sale.buyer_name}'[:200]
-    entry.notes = sale.notes
-    entry.save()
-
-    if sale.financial_entry_id != entry.pk:
-        sale.financial_entry = entry
-        sale.save(update_fields=['financial_entry'])
-    return entry
-
-
-def _mark_bird_sold(bird):
-    """Move a sold bird out of the active flock status."""
-    if bird is not None and bird.status != 'Sold':
-        bird.status = 'Sold'
-        bird.save(update_fields=['status'])
-
-
-def _restore_bird_after_sale(bird):
-    """Return a bird to active status when its last sale record is removed."""
-    if bird is None or bird.status != 'Sold':
-        return
-    if not bird.sales.exists():
-        bird.status = 'Active'
-        bird.save(update_fields=['status'])
-
-
-@login_required(login_url='login')
-def sales_list_page(request):
-    """Render the flock sales ledger with revenue summaries."""
+def expense_list_page(request):
+    """Render the expense tracker with per-flock-member totals."""
     today = timezone.localdate()
     month_start = today.replace(day=1)
     query = request.GET.get('q', '').strip()
+    bird_id = request.GET.get('bird', '').strip()
+    category = request.GET.get('category', '').strip()
     period = request.GET.get('period', '').strip()
 
-    all_sales = FlockSale.objects.filter(user=request.user)
-    counts = all_sales.aggregate(
+    expenses = Expense.objects.filter(user=request.user)
+    counts = expenses.aggregate(
         total=Count('id'),
-        birds_sold=Count('bird', distinct=True),
-        buyers=Count('buyer_name', distinct=True),
+        flock_count=Count('bird', distinct=True),
+        month_count=Count('id', filter=Q(date__gte=month_start)),
+        year_count=Count('id', filter=Q(date__year=today.year)),
     )
-    totals = all_sales.aggregate(
-        total_revenue=Sum('amount'),
-        month_revenue=Sum('amount', filter=Q(sale_date__gte=month_start)),
+    totals = expenses.aggregate(
+        total_expenses=Sum('amount'),
+        month_expenses=Sum('amount', filter=Q(date__gte=month_start)),
     )
-    total_revenue = totals['total_revenue'] or Decimal('0.00')
-    month_revenue = totals['month_revenue'] or Decimal('0.00')
+    total_expenses = totals['total_expenses'] or Decimal('0.00')
+    month_expenses = totals['month_expenses'] or Decimal('0.00')
 
-    sales = all_sales.select_related('bird', 'bird__breed')
+    # All-time totals per flock member for the summary card.
+    flock_summary = (
+        expenses
+        .values('bird_id', 'bird__tag_number', 'bird__breed__name')
+        .annotate(total=Sum('amount'), entry_count=Count('id'))
+        .order_by('-total', 'bird__tag_number')
+    )
+
     if query:
-        sales = sales.filter(
-            Q(buyer_name__icontains=query) |
-            Q(buyer_contact__icontains=query) |
-            Q(bird__tag_number__icontains=query) |
-            Q(notes__icontains=query)
+        expenses = expenses.filter(
+            Q(description__icontains=query) |
+            Q(category__icontains=query) |
+            Q(notes__icontains=query) |
+            Q(bird__tag_number__icontains=query)
         )
 
+    if bird_id.isdigit() and scoped_flock_members(request.user).filter(pk=bird_id).exists():
+        expenses = expenses.filter(bird_id=bird_id)
+    else:
+        bird_id = ''
+
+    valid_categories = {value for value, _ in Expense.CATEGORY_CHOICES}
+    if category not in valid_categories:
+        category = ''
+    if category:
+        expenses = expenses.filter(category=category)
+
     if period == 'month':
-        sales = sales.filter(sale_date__gte=month_start)
+        expenses = expenses.filter(date__gte=month_start)
     elif period == 'year':
-        sales = sales.filter(sale_date__year=today.year)
+        expenses = expenses.filter(date__year=today.year)
     else:
         period = ''
 
-    sales = sales.order_by('-sale_date', '-created_at')
-    paginator = Paginator(sales, 15)
+    expenses = expenses.select_related('bird', 'bird__breed').order_by('-date', '-created_at')
+    paginator = Paginator(expenses, 15)
     page = paginator.get_page(request.GET.get('page', 1))
 
-    return render(request, 'info/sales_list.html', {
-        'sales': page,
+    return render(request, 'info/expense_list.html', {
+        'expenses': page,
         'query': query,
+        'bird_id': bird_id,
+        'category': category,
         'period': period,
-        'counts': counts,
-        'total_revenue': total_revenue,
-        'month_revenue': month_revenue,
+        'categories': Expense.CATEGORY_CHOICES,
         'birds': scoped_flock_members(request.user).select_related('breed').order_by('tag_number'),
+        'flock_summary': flock_summary,
+        'counts': counts,
+        'total_expenses': total_expenses,
+        'month_expenses': month_expenses,
         'today': today,
     })
 
@@ -1562,62 +1155,45 @@ def sales_list_page(request):
 @login_required(login_url='login')
 @require_POST
 @_json_not_found
-@transaction.atomic
-def sale_save_ajax(request):
-    """Create or update a flock sale and its linked income entry."""
-    sale_id = (request.POST.get('id') or '').strip()
+def expense_save_ajax(request):
+    """Create or update an expense tied to one of the user's flock members."""
+    expense_id = (request.POST.get('id') or '').strip()
 
-    if sale_id:
-        if not sale_id.isdigit():
-            raise Http404('Sale not found.')
-        sale = FlockSale.objects.filter(pk=sale_id, user=request.user).first()
-        if sale is None:
-            raise Http404('Sale not found.')
+    if expense_id:
+        if not expense_id.isdigit():
+            raise Http404('Expense not found.')
+        expense = Expense.objects.filter(pk=expense_id, user=request.user).first()
+        if expense is None:
+            raise Http404('Expense not found.')
     else:
-        sale = FlockSale(user=request.user)
+        expense = Expense(user=request.user)
 
-    previous_bird = sale.bird if sale.pk else None
-
-    form = FlockSaleForm(request.POST, instance=sale, user=request.user)
+    form = ExpenseForm(request.POST, instance=expense, user=request.user)
     if not form.is_valid():
         return JsonResponse(
             {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
             status=400,
         )
 
-    sale = form.save(commit=False)
-    sale.user = request.user
-    sale.save()
-    _sync_sale_financial_entry(sale)
-    _mark_bird_sold(sale.bird)
-
-    if previous_bird is not None and previous_bird.pk != sale.bird_id:
-        _restore_bird_after_sale(previous_bird)
+    expense = form.save(commit=False)
+    expense.user = request.user
+    expense.save()
 
     return JsonResponse({
         'status': 'success',
-        'message': 'Sale updated successfully.' if sale_id else 'Sale recorded successfully.',
-        'id': sale.pk,
+        'message': 'Expense updated successfully.' if expense_id else 'Expense added successfully.',
+        'id': expense.pk,
     })
 
 
 @login_required(login_url='login')
 @require_POST
 @_json_not_found
-@transaction.atomic
-def sale_delete_ajax(request, pk):
-    """Delete a sale, its linked income entry, and restore the bird status."""
-    sale = FlockSale.objects.filter(pk=pk, user=request.user).select_related('financial_entry').first()
-    if sale is None:
-        raise Http404('Sale not found.')
+def expense_delete_ajax(request, pk):
+    """Delete one of the user's expense records."""
+    expense = Expense.objects.filter(pk=pk, user=request.user).first()
+    if expense is None:
+        raise Http404('Expense not found.')
 
-    bird = sale.bird
-    if sale.financial_entry_id:
-        sale.financial_entry.delete()
-    sale.delete()
-    _restore_bird_after_sale(bird)
-
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Sale deleted successfully.',
-    })
+    expense.delete()
+    return JsonResponse({'status': 'success', 'message': 'Expense deleted successfully.'})

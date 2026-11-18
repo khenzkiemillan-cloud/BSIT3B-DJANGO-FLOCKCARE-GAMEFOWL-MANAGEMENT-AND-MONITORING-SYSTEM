@@ -91,7 +91,7 @@
         const links = Array.from(document.querySelectorAll(".dh-sidebar .nav-link"));
 
         // Some menu entries share the same path but differ by query string
-        // (for example the flock list can be filtered with ?status=Conditioning).
+        // (for example the flock list can be filtered with ?status=Active).
         // A filtered link counts as a match when all of its query parameters
         // are present in the current URL, so extra params still match.
         function isFilteredMatch(linkUrl) {
@@ -110,7 +110,7 @@
         links.forEach(function (link) {
           const linkUrl = new URL(link.href, window.location.href);
           // Match the exact path (not a shared prefix) and, when the link
-          // carries a filter such as ?status=Conditioning, its query params.
+          // carries a filter such as ?status=Active, its query params.
           let isActive = linkUrl.pathname === currentPath;
           if (isActive && linkUrl.search) {
             isActive = isFilteredMatch(linkUrl);

@@ -11,7 +11,7 @@
     <div class="page-pretitle">Flock management</div>
     <h2 class="page-title mb-0">Flock members</h2>
     <p class="dh-page-subtitle">
-      Track tag numbers, breeding, conditioning, and fight records for every bird in your flock.
+      Track tag numbers, breeding, and fight records for every bird in your flock.
     </p>
   </div>
 
@@ -31,13 +31,6 @@
       </div>
     </div>
     <div class="dh-mini-stat">
-      <span class="dh-mini-stat-icon is-warning"><i class="fas fa-dumbbell"></i></span>
-      <div class="min-w-0">
-        <span class="dh-mini-stat-label">Conditioning</span>
-        <span class="dh-mini-stat-value">{{ counts.conditioning }}</span>
-      </div>
-    </div>
-    <div class="dh-mini-stat">
       <span class="dh-mini-stat-icon is-info"><i class="fas fa-egg"></i></span>
       <div class="min-w-0">
         <span class="dh-mini-stat-label">Breeding</span>
@@ -48,124 +41,7 @@
 
   {% include "info/partials/breed_quick_add.html" %}
 
-  {% if status == 'Conditioning' %}
-  <div class="card mb-3 dh-inline-form" id="quickConditioningCard">
-    <div class="card-header d-flex flex-wrap align-items-center gap-2">
-      <div>
-        <div class="card-title mb-0">
-          <i class="fas fa-dumbbell text-warning" aria-hidden="true"></i>
-          Conditioning requirements
-        </div>
-        <div class="text-muted small">
-          Pick a bird, then choose a program and fill in its target weight and feed plan.
-        </div>
-      </div>
-      <span class="badge bg-warning-lt text-warning ms-auto">Conditioning</span>
-    </div>
-    <form id="quickConditioningForm" novalidate>
-      {% csrf_token %}
-      <div class="card-body">
-        <div class="dh-form-intro">
-          <div class="dh-form-requirements">
-            <span class="dh-req-title">Conditioning requirements</span>
-            <ul>
-              <li><span class="text-danger">*</span> Bird</li>
-              <li><span class="text-danger">*</span> Start date</li>
-              <li><span class="text-danger">*</span> Target / fight weight</li>
-              <li><span class="text-danger">*</span> Conditioning program</li>
-              <li><span class="text-danger">*</span> Feed / diet plan</li>
-              <li>Target date, starting phase and notes (optional)</li>
-              <li>Current weight (optional)</li>
-            </ul>
-          </div>
-        </div>
-        <div class="row g-4 dh-form-grid">
-          <div class="col-sm-6 col-lg-3">
-            <label class="form-label required" for="quick_cond_bird">Bird</label>
-            <select name="bird_id" id="quick_cond_bird" class="form-select" required>
-              <option value="">Select a bird</option>
-              {% for bird in farm_birds %}
-                <option value="{{ bird.id }}">
-                  {{ bird.tag_number }} — {{ bird.gender }} • {{ bird.status }}
-                </option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-sm-6 col-lg-3">
-            <label class="form-label required" for="quick_cond_start">Conditioning start date</label>
-            <input type="date" name="conditioning_start_date" id="quick_cond_start"
-                   class="form-control" value="{% now 'Y-m-d' %}" required>
-          </div>
-          <div class="col-sm-6 col-lg-3">
-            <label class="form-label" for="quick_cond_target_date">Target fight date</label>
-            <input type="date" name="conditioning_target_date" id="quick_cond_target_date"
-                   class="form-control">
-          </div>
-          <div class="col-sm-6 col-lg-3">
-            <label class="form-label required" for="quick_cond_target">Target / fight weight (g)</label>
-            <input type="number" name="target_weight_grams" id="quick_cond_target"
-                   class="form-control" min="1" step="1" placeholder="e.g. 2200" required>
-          </div>
-          <div class="col-sm-6 col-lg-3">
-            <label class="form-label required" for="quick_cond_program">Conditioning program</label>
-            <select name="conditioning_program" id="quick_cond_program" class="form-select" required>
-              {% for program in conditioning_programs %}
-                <option value="{{ program }}">{{ program }}</option>
-              {% endfor %}
-              <option value="Custom">Custom / other program</option>
-            </select>
-          </div>
-          <div class="col-sm-6 col-lg-3 d-none" id="quickCondCustomWrap">
-            <label class="form-label required" for="quick_cond_custom">Custom program name</label>
-            <input type="text" name="conditioning_program_custom" id="quick_cond_custom"
-                   class="form-control" maxlength="100" placeholder="e.g. Beach roadwork">
-          </div>
-          <div class="col-sm-6 col-lg-3">
-            <label class="form-label" for="quick_cond_phase">Starting phase</label>
-            <select name="conditioning_phase" id="quick_cond_phase" class="form-select">
-              {% for value, label in phases %}
-              <option value="{{ value }}">{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-sm-6 col-lg-3">
-            <label class="form-label required" for="quick_cond_feed">Feed / diet plan</label>
-            <select name="conditioning_feed_plan" id="quick_cond_feed" class="form-select" required>
-              <option value="">Select a diet plan</option>
-              {% for plan in conditioning_feed_plans %}
-              <option value="{{ plan }}">{{ plan }}</option>
-              {% endfor %}
-              <option value="Custom">Custom / other diet</option>
-            </select>
-          </div>
-          <div class="col-sm-6 col-lg-3 d-none" id="quickCondFeedCustomWrap">
-            <label class="form-label required" for="quick_cond_feed_custom">Custom diet plan</label>
-            <input type="text" name="conditioning_feed_plan_custom" id="quick_cond_feed_custom"
-                   class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily">
-          </div>
-          <div class="col-sm-6 col-lg-3">
-            <label class="form-label" for="quick_cond_weight">Current weight (g)</label>
-            <input type="number" name="weight_grams" id="quick_cond_weight"
-                   class="form-control" min="0" step="1" placeholder="e.g. 2150">
-          </div>
-          <div class="col-12">
-            <label class="form-label" for="quick_cond_notes">Conditioning notes</label>
-            <textarea name="conditioning_notes" id="quick_cond_notes" class="form-control" rows="2"
-                      maxlength="500" placeholder="e.g. Recovering from mild hoof soreness; keep roadwork light."></textarea>
-          </div>
-        </div>
-        <div id="quickConditioningError" class="alert alert-danger d-none mt-3 mb-0" role="alert"></div>
-      </div>
-      <div class="card-footer d-flex flex-wrap justify-content-end gap-2">
-        <button type="submit" class="btn btn-warning" id="quickConditioningSubmit">
-          <i class="fas fa-dumbbell me-2"></i>Start conditioning
-        </button>
-      </div>
-    </form>
-  </div>
-  {% else %}
   {% include "info/partials/quick_member_form.html" with show_full_form=True %}
-  {% endif %}
 
   <div class="dh-toolbar">
     <form method="GET" class="dh-search-form">
@@ -194,10 +70,6 @@
       <a href="?status=Active{% if query %}&q={{ query|urlencode }}{% endif %}"
          class="dh-chip {% if status == 'Active' %}is-active{% endif %}">
         Active <span class="dh-chip-count">{{ counts.active }}</span>
-      </a>
-      <a href="?status=Conditioning{% if query %}&q={{ query|urlencode }}{% endif %}"
-         class="dh-chip {% if status == 'Conditioning' %}is-active{% endif %}">
-        Conditioning <span class="dh-chip-count">{{ counts.conditioning }}</span>
       </a>
       <a href="?status=Retired{% if query %}&q={{ query|urlencode }}{% endif %}"
          class="dh-chip {% if status == 'Retired' %}is-active{% endif %}">
@@ -242,7 +114,6 @@
             </button>
             <div class="dropdown-menu">
               <a class="dropdown-item" href="#" onclick="applyBatchStatus('Active')">Active</a>
-              <a class="dropdown-item" href="#" onclick="applyBatchStatus('Conditioning')">Conditioning</a>
               <a class="dropdown-item" href="#" onclick="applyBatchStatus('Broodcock')">Broodcock</a>
               <a class="dropdown-item" href="#" onclick="applyBatchStatus('Broodhen')">Broodhen</a>
               <a class="dropdown-item" href="#" onclick="applyBatchStatus('Retired')">Retired</a>
@@ -292,8 +163,6 @@
             <td data-label="Status">
               {% if bird.status == 'Active' %}
               <span class="dh-status is-active"><span class="dh-status-dot"></span>{{ bird.status }}</span>
-              {% elif bird.status == 'Conditioning' %}
-              <span class="dh-status is-warning"><span class="dh-status-dot"></span>{{ bird.status }}</span>
               {% elif bird.status == 'Retired' %}
               <span class="dh-status is-muted"><span class="dh-status-dot"></span>{{ bird.status }}</span>
               {% elif bird.status == 'Sold' %}
@@ -336,13 +205,6 @@
                         data-wins="{{ bird.wins }}"
                         data-losses="{{ bird.losses }}"
                         data-draws="{{ bird.draws }}"
-                        data-conditioning-start="{{ bird.conditioning_start_date|date:'Y-m-d' }}"
-                        data-conditioning-target-date="{{ bird.conditioning_target_date|date:'Y-m-d' }}"
-                        data-target-weight="{{ bird.target_weight_grams|default:'' }}"
-                        data-conditioning-program="{{ bird.conditioning_program|default:'' }}"
-                        data-conditioning-feed="{{ bird.conditioning_feed_plan|default:'' }}"
-                        data-conditioning-phase="{{ bird.conditioning_phase|default:'foundation' }}"
-                        data-conditioning-notes="{{ bird.conditioning_notes|default:'' }}"
                         data-sire="{{ bird.sire|default:'' }}"
                         data-dam="{{ bird.dam|default:'' }}"
                         title="Edit"
@@ -367,14 +229,7 @@
                         data-id="{{ bird.id }}"
                         data-tag-number="{{ bird.tag_number }}"
                         data-weights-url="{% url 'info:weight_logs_ajax' bird.id %}"
-                        data-conditioning-start="{{ bird.conditioning_start_date|date:'M j, Y' }}"
-                        data-target-weight="{{ bird.target_weight_grams|default:'' }}"
-                        data-conditioning-program="{{ bird.conditioning_program|default:'' }}"
-                        data-conditioning-feed="{{ bird.conditioning_feed_plan|default:'' }}"
-                        data-conditioning-target-date="{{ bird.conditioning_target_date|date:'M j, Y' }}"
-                        data-conditioning-phase="{{ bird.get_conditioning_phase_display }}"
-                        data-conditioning-notes="{{ bird.conditioning_notes|default:'' }}"
-                        title="Weight / Conditioning logs"
+                        title="Weight logs"
                         aria-label="Weight logs for {{ bird.tag_number }}">
                   <i class="fas fa-scale-balanced text-secondary"></i>
                 </button>
@@ -400,6 +255,12 @@
                         aria-label="Pedigree for {{ bird.tag_number }}">
                   <i class="fas fa-sitemap text-info"></i>
                 </button>
+                <a href="{% url 'info:expense_list' %}?bird={{ bird.id }}"
+                   class="btn btn-ghost-secondary btn-icon btn-sm"
+                   title="Expenses"
+                   aria-label="Expenses for {{ bird.tag_number }}">
+                  <i class="fas fa-receipt text-danger"></i>
+                </a>
                 <a href="{% url 'info:pedigree_certificate' bird.id %}"
                    target="_blank"
                    class="btn btn-ghost-secondary btn-icon btn-sm"
@@ -510,8 +371,8 @@
               <button type="button" class="dh-form-tab" id="memberTabBreedingBtn" data-form-tab data-tab-target="memberTabBreeding" role="tab" aria-controls="memberTabBreeding" aria-selected="false" tabindex="-1">
                 <span class="dh-form-tab-index">2</span><span class="dh-form-tab-label">Breeding</span>
               </button>
-              <button type="button" class="dh-form-tab" id="memberTabConditioningBtn" data-form-tab data-tab-target="memberTabConditioning" role="tab" aria-controls="memberTabConditioning" aria-selected="false" tabindex="-1">
-                <span class="dh-form-tab-index">3</span><span class="dh-form-tab-label">Conditioning</span>
+              <button type="button" class="dh-form-tab" id="memberTabPerformanceBtn" data-form-tab data-tab-target="memberTabPerformance" role="tab" aria-controls="memberTabPerformance" aria-selected="false" tabindex="-1">
+                <span class="dh-form-tab-index">3</span><span class="dh-form-tab-label">Performance</span>
               </button>
               <button type="button" class="dh-form-tab" id="memberTabConformationBtn" data-form-tab data-tab-target="memberTabConformation" role="tab" aria-controls="memberTabConformation" aria-selected="false" tabindex="-1">
                 <span class="dh-form-tab-index">4</span><span class="dh-form-tab-label">Conformation &amp; photo</span>
@@ -564,7 +425,6 @@
                     <label class="form-label required">Status</label>
                     <select name="status" id="member_status" class="form-select" required>
                       <option value="Active">Active</option>
-                      <option value="Conditioning">Conditioning</option>
                       <option value="Broodcock">Broodcock</option>
                       <option value="Broodhen">Broodhen</option>
                       <option value="Retired">Retired</option>
@@ -602,55 +462,13 @@
                 </div>
                 <div class="dh-form-tab-actions">
                   <button type="button" class="btn btn-ghost-secondary" data-tab-prev><i class="fas fa-arrow-left me-1"></i>Back</button>
-                  <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Conditioning <i class="fas fa-arrow-right ms-1"></i></button>
+                  <button type="button" class="btn btn-primary ms-auto" data-tab-next>Next: Performance <i class="fas fa-arrow-right ms-1"></i></button>
                 </div>
               </div>
 
-              <div class="dh-form-tab-pane" id="memberTabConditioning" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabConditioningBtn" aria-hidden="true" hidden>
-                <div class="dh-form-section-title mb-1">Conditioning requirements</div>
-                <p class="text-secondary small mb-3">These fields are required when the bird's status is set to <strong>Conditioning</strong>.</p>
+              <div class="dh-form-tab-pane" id="memberTabPerformance" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabPerformanceBtn" aria-hidden="true" hidden>
+                <div class="dh-form-section-title mb-3">Weight &amp; fight record</div>
                 <div class="row g-4 dh-form-grid">
-                  <div class="col-md-6">
-                    <label class="form-label" data-conditioning-label>Conditioning start date</label>
-                    <input type="date" name="conditioning_start_date" id="member_conditioning_start_date" class="form-control">
-                    <small class="form-hint">When the bird entered conditioning.</small>
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label">Target fight date</label>
-                    <input type="date" name="conditioning_target_date" id="member_conditioning_target_date" class="form-control">
-                    <small class="form-hint">Optional derby or match date.</small>
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label" data-conditioning-label>Target / fight weight (grams)</label>
-                    <input type="number" name="target_weight_grams" id="member_target_weight" class="form-control" min="1" step="1" placeholder="e.g. 2200">
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label" data-conditioning-label>Conditioning program</label>
-                    <input type="text" name="conditioning_program" id="member_conditioning_program" class="form-control" maxlength="100" list="conditioningProgramSuggestions" placeholder="e.g. Roadwork, Sparring">
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label" data-conditioning-label>Feed / diet plan</label>
-                    <select name="conditioning_feed_plan" id="member_conditioning_feed_plan" class="form-select">
-                      <option value="">Select a diet plan</option>
-                      {% for plan in conditioning_feed_plans %}
-                      <option value="{{ plan }}">{{ plan }}</option>
-                      {% endfor %}
-                      <option value="Custom">Custom / other diet</option>
-                    </select>
-                  </div>
-                  <div class="col-md-6 d-none" id="memberFeedCustomWrap">
-                    <label class="form-label" id="memberFeedCustomLabel">Custom diet plan</label>
-                    <input type="text" name="conditioning_feed_plan_custom" id="member_conditioning_feed_plan_custom"
-                           class="form-control" maxlength="255" placeholder="e.g. High-protein mix, twice daily">
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label">Current phase</label>
-                    <select name="conditioning_phase" id="member_conditioning_phase" class="form-select">
-                      {% for value, label in phases %}
-                      <option value="{{ value }}">{{ label }}</option>
-                      {% endfor %}
-                    </select>
-                  </div>
                   <div class="col-md-6">
                     <label class="form-label">Current weight (grams)</label>
                     <input type="number" name="weight_grams" id="member_weight" class="form-control" min="0" step="1">
@@ -668,14 +486,9 @@
                     <input type="number" name="draws" id="member_draws" class="form-control" min="0" value="0">
                   </div>
                   <div class="col-12">
-                    <label class="form-label">Conditioning notes</label>
-                    <textarea name="conditioning_notes" id="member_conditioning_notes" class="form-control" rows="2" maxlength="500"
-                              placeholder="Optional notes about workouts, recovery or target event."></textarea>
-                  </div>
-                  <div class="col-12">
                     <div class="alert alert-info py-2 small mb-0">
                       <i class="fas fa-circle-info me-1"></i>
-                      Use the <strong>scale</strong> and <strong>trophy</strong> icons in the flock table to log daily weights and sanctioned fights. Health and medicine records are logged from their own pages.
+                      Use the <strong>scale</strong> and <strong>trophy</strong> icons in the flock table to log weights and sanctioned fights. Health and medicine records are logged from their own pages.
                     </div>
                   </div>
                 </div>
@@ -736,11 +549,6 @@
         <datalist id="breedSuggestions">
           {% for breed_name in common_breeds %}
           <option value="{{ breed_name }}"></option>
-          {% endfor %}
-        </datalist>
-        <datalist id="conditioningProgramSuggestions">
-          {% for program in conditioning_programs %}
-          <option value="{{ program }}"></option>
           {% endfor %}
         </datalist>
         <div class="modal-footer">
@@ -975,15 +783,9 @@
       <div class="modal-body">
         <div id="fightError" class="alert alert-danger d-none"></div>
 
-        <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-light-lt rounded">
-          <div>
-            <div class="text-muted small text-uppercase">Career Record</div>
-            <div class="h3 mb-0" id="fightCareerRecord">0W – 0L – 0D</div>
-          </div>
-          <div class="text-end">
-            <div class="text-muted small text-uppercase">Win Rate</div>
-            <div class="h3 mb-0 text-success" id="fightWinRate">0%</div>
-          </div>
+        <div class="mb-3 p-3 bg-light-lt rounded">
+          <div class="text-muted small text-uppercase">Career Record</div>
+          <div class="h3 mb-0" id="fightCareerRecord">0W – 0L – 0D</div>
         </div>
 
         <div class="dh-form-section-title mb-2">Sanctioned Fights</div>
@@ -1053,58 +855,24 @@
   </div>
 </div>
 
-<!-- Weight & Conditioning Modal -->
+<!-- Weight Logs Modal -->
 <div class="modal modal-blur fade" id="weightModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
         <span class="dh-modal-icon is-secondary"><i class="fas fa-scale-balanced"></i></span>
-        <h5 class="modal-title">Conditioning Weight Logs — <span id="weightBirdTag"></span></h5>
+        <h5 class="modal-title">Weight Logs — <span id="weightBirdTag"></span></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <div id="weightError" class="alert alert-danger d-none"></div>
-
-        <div id="weightPlanSummary" class="border rounded p-3 mb-3 d-none">
-          <div class="fw-semibold mb-2"><i class="fas fa-dumbbell me-1 text-warning"></i>Conditioning plan</div>
-          <div class="row g-2 small">
-            <div class="col-6">
-              <div class="text-muted">Started</div>
-              <div id="weightPlanStart" class="fw-medium">—</div>
-            </div>
-            <div class="col-6">
-              <div class="text-muted">Target weight</div>
-              <div id="weightPlanTarget" class="fw-medium">—</div>
-            </div>
-            <div class="col-6">
-              <div class="text-muted">Program</div>
-              <div id="weightPlanProgram" class="fw-medium">—</div>
-            </div>
-            <div class="col-6">
-              <div class="text-muted">Feed / diet</div>
-              <div id="weightPlanFeed" class="fw-medium">—</div>
-            </div>
-            <div class="col-6">
-              <div class="text-muted">Target date</div>
-              <div id="weightPlanTargetDate" class="fw-medium">—</div>
-            </div>
-            <div class="col-6">
-              <div class="text-muted">Current phase</div>
-              <div id="weightPlanPhase" class="fw-medium">—</div>
-            </div>
-            <div class="col-12" id="weightPlanNotesWrap">
-              <div class="text-muted">Notes</div>
-              <div id="weightPlanNotes" class="fw-medium">—</div>
-            </div>
-          </div>
-        </div>
 
         <form id="weightForm" novalidate>
           {% csrf_token %}
           <input type="hidden" name="bird_id" id="weight_bird_id">
 
           <div class="dh-form-tabs" data-form-tabs>
-            <div class="dh-form-tab-nav" role="tablist" aria-label="Conditioning weight steps">
+            <div class="dh-form-tab-nav" role="tablist" aria-label="Weight log steps">
               <button type="button" class="dh-form-tab is-active" id="weightTabLogBtn" data-form-tab data-tab-target="weightTabLog" role="tab" aria-controls="weightTabLog" aria-selected="true">
                 <span class="dh-form-tab-index">1</span><span class="dh-form-tab-label">Log weight</span>
               </button>
@@ -1114,7 +882,7 @@
             </div>
 
             <div class="dh-form-tab-pane is-active" id="weightTabLog" data-form-tab-pane role="tabpanel" aria-labelledby="weightTabLogBtn" aria-hidden="false">
-              <div class="dh-form-section-title mb-3">Daily conditioning entry</div>
+              <div class="dh-form-section-title mb-3">Daily weight entry</div>
               <div class="row g-2">
                 <div class="col-6">
                   <label class="form-label required">Date</label>
@@ -1172,59 +940,11 @@
 
   const memberForm = document.getElementById('memberForm');
   const healthForm = document.getElementById('healthForm');
-  const memberStatusField = document.getElementById('member_status');
   const memberBreedSelect = document.getElementById('member_breed');
   const memberNewBreedInput = document.getElementById('member_new_breed');
   const memberAddBreedBtn = document.getElementById('memberAddBreedBtn');
   const memberBreedHint = document.getElementById('memberBreedHint');
   const MEMBER_BREED_HINT = 'Optional. The breed is added to the dropdown and selected immediately.';
-  const memberFeedSelect = document.getElementById('member_conditioning_feed_plan');
-  const memberFeedCustomWrap = document.getElementById('memberFeedCustomWrap');
-  const memberFeedCustomInput = document.getElementById('member_conditioning_feed_plan_custom');
-  const memberFeedCustomLabel = document.getElementById('memberFeedCustomLabel');
-  const conditioningFieldIds = [
-    'member_conditioning_start_date',
-    'member_target_weight',
-    'member_conditioning_program',
-    'member_conditioning_feed_plan',
-  ];
-
-  function syncConditioningRequirements() {
-    const isConditioning = memberStatusField.value === 'Conditioning';
-    conditioningFieldIds.forEach(function (id) {
-      const field = document.getElementById(id);
-      if (field) field.required = isConditioning;
-    });
-    memberForm.querySelectorAll('[data-conditioning-label]').forEach(function (label) {
-      label.classList.toggle('required', isConditioning);
-    });
-  }
-
-  memberStatusField.addEventListener('change', syncConditioningRequirements);
-
-  function syncMemberFeedCustom() {
-    const isCustom = memberFeedSelect.value === 'Custom';
-    memberFeedCustomWrap.classList.toggle('d-none', !isCustom);
-    memberFeedCustomInput.required = isCustom;
-    if (!isCustom) memberFeedCustomInput.value = '';
-    memberFeedCustomLabel.classList.toggle('required', isCustom);
-  }
-
-  function setMemberFeedPlan(value) {
-    const isPreset = Array.from(memberFeedSelect.options).some(function (option) {
-      return option.value === value && option.value && option.value !== 'Custom';
-    });
-    if (value && !isPreset) {
-      memberFeedSelect.value = 'Custom';
-      memberFeedCustomInput.value = value;
-    } else {
-      memberFeedSelect.value = value || '';
-      memberFeedCustomInput.value = '';
-    }
-    syncMemberFeedCustom();
-  }
-
-  memberFeedSelect.addEventListener('change', syncMemberFeedCustom);
 
   function addMemberBreed() {
     if (!window.DHBreedQuickAdd) return;
@@ -1336,7 +1056,6 @@
   memberModalEl.addEventListener('show.bs.modal', function (event) {
     clearError(memberErrorBox);
     memberForm.reset();
-    syncConditioningRequirements();
     if (window.DHFormTabs) window.DHFormTabs.reset(memberForm);
     document.getElementById('member_id').value = '';
     document.getElementById('member_new_breed').value = '';
@@ -1350,13 +1069,6 @@
     document.getElementById('member_leg_color').value = 'Yellow';
     document.getElementById('member_color').value = '';
     document.getElementById('member_cage_number').value = '';
-    document.getElementById('member_conditioning_start_date').value = '';
-    document.getElementById('member_conditioning_target_date').value = '';
-    document.getElementById('member_target_weight').value = '';
-    document.getElementById('member_conditioning_program').value = '';
-    setMemberFeedPlan('');
-    document.getElementById('member_conditioning_phase').value = 'foundation';
-    document.getElementById('member_conditioning_notes').value = '';
     document.getElementById('memberModalTitle').textContent = 'Add flock member';
 
     const button = event.relatedTarget;
@@ -1380,16 +1092,8 @@
     document.getElementById('member_leg_color').value = button.dataset.legColor || 'Yellow';
     document.getElementById('member_color').value = button.dataset.color || '';
     document.getElementById('member_cage_number').value = button.dataset.cageNumber || '';
-    document.getElementById('member_conditioning_start_date').value = button.dataset.conditioningStart || '';
-    document.getElementById('member_conditioning_target_date').value = button.dataset.conditioningTargetDate || '';
-    document.getElementById('member_target_weight').value = button.dataset.targetWeight || '';
-    document.getElementById('member_conditioning_program').value = button.dataset.conditioningProgram || '';
-    setMemberFeedPlan(button.dataset.conditioningFeed || '');
-    document.getElementById('member_conditioning_phase').value = button.dataset.conditioningPhase || 'foundation';
-    document.getElementById('member_conditioning_notes').value = button.dataset.conditioningNotes || '';
     document.getElementById('member_sire').value = button.dataset.sire || '';
     document.getElementById('member_dam').value = button.dataset.dam || '';
-    syncConditioningRequirements();
   });
 
   memberForm.addEventListener('submit', function (event) {
@@ -1804,7 +1508,6 @@
       .then(r => r.json())
       .then(data => {
         document.getElementById('fightCareerRecord').textContent = `${data.wins}W – ${data.losses}L – ${data.draws}D`;
-        document.getElementById('fightWinRate').textContent = `${data.win_rate}%`;
 
         if (!data.data || !data.data.length) {
           list.innerHTML = '<div class="list-group-item text-muted">No sanctioned fights recorded yet.</div>';
@@ -1926,30 +1629,6 @@
       });
   }
 
-  function updateWeightPlanSummary(button) {
-    const summary = document.getElementById('weightPlanSummary');
-    if (!summary) return;
-    const start = button.dataset.conditioningStart || '';
-    const target = button.dataset.targetWeight || '';
-    const program = button.dataset.conditioningProgram || '';
-    const feed = button.dataset.conditioningFeed || '';
-    const targetDate = button.dataset.conditioningTargetDate || '';
-    const phase = button.dataset.conditioningPhase || '';
-    const notes = button.dataset.conditioningNotes || '';
-
-    document.getElementById('weightPlanStart').textContent = start || '—';
-    document.getElementById('weightPlanTarget').textContent = target ? target + ' g' : '—';
-    document.getElementById('weightPlanProgram').textContent = program || '—';
-    document.getElementById('weightPlanFeed').textContent = feed || '—';
-    document.getElementById('weightPlanTargetDate').textContent = targetDate || '—';
-    document.getElementById('weightPlanPhase').textContent = phase || '—';
-    document.getElementById('weightPlanNotes').textContent = notes || '—';
-    document.getElementById('weightPlanNotesWrap').classList.toggle('d-none', !notes);
-
-    const hasPlan = start || target || program || feed || targetDate || phase || notes;
-    summary.classList.toggle('d-none', !hasPlan);
-  }
-
   if (weightModalEl) {
     weightModalEl.addEventListener('show.bs.modal', function (event) {
       const button = event.relatedTarget;
@@ -1960,7 +1639,6 @@
       document.getElementById('weight_bird_id').value = activeWeightBirdId;
       document.getElementById('weight_date').value = localDateString();
       clearError(weightErrorBox);
-      updateWeightPlanSummary(button);
       loadWeightLogs(activeWeightBirdId);
     });
 
@@ -2004,85 +1682,6 @@
       })
       .catch(err => showError(weightErrorBox, err.message));
   };
-})();
-</script>
-<script>
-(function () {
-  const form = document.getElementById('quickConditioningForm');
-  if (!form) return;
-
-  const errorBox = document.getElementById('quickConditioningError');
-  const programSelect = document.getElementById('quick_cond_program');
-  const customWrap = document.getElementById('quickCondCustomWrap');
-  const customInput = document.getElementById('quick_cond_custom');
-  const feedSelect = document.getElementById('quick_cond_feed');
-  const feedCustomWrap = document.getElementById('quickCondFeedCustomWrap');
-  const feedCustomInput = document.getElementById('quick_cond_feed_custom');
-  const submitBtn = document.getElementById('quickConditioningSubmit');
-
-  function showError(message) {
-    errorBox.textContent = message;
-    errorBox.classList.remove('d-none');
-  }
-
-  function clearError() {
-    errorBox.textContent = '';
-    errorBox.classList.add('d-none');
-  }
-
-  function toggleCustomProgram() {
-    const isCustom = programSelect.value === 'Custom';
-    customWrap.classList.toggle('d-none', !isCustom);
-    customInput.required = isCustom;
-    if (!isCustom) customInput.value = '';
-  }
-
-  programSelect.addEventListener('change', toggleCustomProgram);
-
-  function toggleCustomFeed() {
-    const isCustom = feedSelect.value === 'Custom';
-    feedCustomWrap.classList.toggle('d-none', !isCustom);
-    feedCustomInput.required = isCustom;
-    if (!isCustom) feedCustomInput.value = '';
-  }
-
-  feedSelect.addEventListener('change', toggleCustomFeed);
-
-  form.addEventListener('submit', function (event) {
-    event.preventDefault();
-    clearError();
-
-    if (!form.checkValidity()) {
-      form.reportValidity();
-      return;
-    }
-
-    submitBtn.disabled = true;
-
-    fetch("{% url 'info:conditioning_save_ajax' %}", {
-      method: 'POST',
-      headers: { 'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value },
-      body: new FormData(form),
-    })
-      .then(async function (response) {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Could not start conditioning.');
-        return data;
-      })
-      .then(function () {
-        if (typeof window.refreshMainContent === 'function') {
-          window.refreshMainContent();
-        } else {
-          window.location.reload();
-        }
-      })
-      .catch(function (error) {
-        showError(error.message);
-      })
-      .finally(function () {
-        submitBtn.disabled = false;
-      });
-  });
 })();
 </script>
 {% endblock %}

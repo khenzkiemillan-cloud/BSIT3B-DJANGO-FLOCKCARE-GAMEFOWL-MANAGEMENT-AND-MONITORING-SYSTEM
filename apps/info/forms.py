@@ -1,142 +1,19 @@
-from datetime import timedelta
-
 from django import forms
 from django.utils import timezone
 
-from .choices import CONDITIONING_PROGRAMS
 from .models import (
     FlockMember, HealthRecord, Medicine,
-    FightRecord, WeightLog, BreedingPen, ClutchRecord, FinancialEntry,
-    ConditioningSession, FlockSale,
+    FightRecord, WeightLog, BreedingPen, ClutchRecord, Expense,
 )
-
-
-def _validate_conditioning_values(cleaned_data, add_error):
-    """Reject impossible or likely-typo conditioning dates and weights."""
-    today = timezone.localdate()
-    start_date = cleaned_data.get('conditioning_start_date')
-    target_date = cleaned_data.get('conditioning_target_date')
-    target_weight = cleaned_data.get('target_weight_grams')
-    current_weight = cleaned_data.get('weight_grams')
-
-    if start_date and start_date > today:
-        add_error(
-            'conditioning_start_date',
-            'Conditioning start date cannot be in the future.',
-        )
-
-    if target_date and start_date and target_date <= start_date:
-        add_error(
-            'conditioning_target_date',
-            'Target date must be after the conditioning start date.',
-        )
-
-    if target_date and target_date > today + timedelta(days=365):
-        add_error(
-            'conditioning_target_date',
-            'Target date must be within the next year.',
-        )
-
-    if target_weight and current_weight:
-        if abs(target_weight - current_weight) > current_weight * 0.5:
-            add_error(
-                'target_weight_grams',
-                'Target weight must be within 50% of the current weight. '
-                'Check the numbers before saving.',
-            )
-
-
-class ConditioningForm(forms.Form):
-    """Validate the conditioning requirements for an existing bird."""
-
-    conditioning_start_date = forms.DateField(
-        widget=forms.DateInput(attrs={'type': 'date'}),
-    )
-    conditioning_target_date = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={'type': 'date'}),
-    )
-    target_weight_grams = forms.IntegerField(min_value=1)
-    conditioning_program = forms.ChoiceField(
-        choices=[(program, program) for program in CONDITIONING_PROGRAMS] + [
-            ('Custom', 'Custom / other program'),
-        ],
-    )
-    conditioning_program_custom = forms.CharField(
-        max_length=100, required=False,
-    )
-    conditioning_feed_plan = forms.CharField(max_length=255)
-    conditioning_feed_plan_custom = forms.CharField(
-        max_length=255, required=False,
-    )
-    weight_grams = forms.IntegerField(min_value=0, required=False)
-    conditioning_phase = forms.ChoiceField(
-        choices=FlockMember.CONDITIONING_PHASES,
-        required=False,
-        initial='foundation',
-    )
-    conditioning_notes = forms.CharField(
-        max_length=500, required=False, widget=forms.Textarea(attrs={'rows': 2}),
-    )
-
-    def clean(self):
-        cleaned_data = super().clean()
-        if cleaned_data.get('conditioning_program') == 'Custom':
-            custom = (cleaned_data.get('conditioning_program_custom') or '').strip()
-            if not custom:
-                self.add_error(
-                    'conditioning_program_custom',
-                    'Enter the custom conditioning program.',
-                )
-            else:
-                cleaned_data['conditioning_program'] = custom
-
-        if not cleaned_data.get('conditioning_phase'):
-            cleaned_data['conditioning_phase'] = 'foundation'
-
-        if cleaned_data.get('conditioning_feed_plan') == 'Custom':
-            custom_feed = (
-                cleaned_data.get('conditioning_feed_plan_custom') or ''
-            ).strip()
-            if not custom_feed:
-                self.add_error(
-                    'conditioning_feed_plan_custom',
-                    'Enter the custom diet plan.',
-                )
-            else:
-                cleaned_data['conditioning_feed_plan'] = custom_feed
-
-        cleaned_data['conditioning_feed_plan'] = (
-            cleaned_data.get('conditioning_feed_plan') or ''
-        ).strip()
-        cleaned_data['conditioning_notes'] = (
-            cleaned_data.get('conditioning_notes') or ''
-        ).strip()
-        _validate_conditioning_values(cleaned_data, self.add_error)
-        return cleaned_data
 
 
 class FlockMemberForm(forms.ModelForm):
     """Validate and save flock member records submitted from the UI."""
 
-    conditioning_feed_plan_custom = forms.CharField(
-        max_length=255, required=False,
-    )
-
-    # Filled in on the Conditioning tab. They only become mandatory once the
-    # bird's status is set to Conditioning, so Active/Retired birds can still
-    # be saved without a conditioning plan.
-    CONDITIONING_REQUIRED_FIELDS = [
-        ('conditioning_start_date', 'Conditioning start date'),
-        ('target_weight_grams', 'Target / fight weight'),
-        ('conditioning_program', 'Conditioning program'),
-        ('conditioning_feed_plan', 'Feed / diet plan'),
-    ]
-
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        for optional_field in ['wins', 'losses', 'draws', 'weight_grams', 'comb_type', 'leg_color', 'color', 'cage_number', 'image', 'sire', 'dam', 'birth_date', 'conditioning_start_date', 'target_weight_grams', 'conditioning_program', 'conditioning_feed_plan', 'conditioning_target_date', 'conditioning_notes']:
+        for optional_field in ['wins', 'losses', 'draws', 'weight_grams', 'comb_type', 'leg_color', 'color', 'cage_number', 'image', 'sire', 'dam', 'birth_date']:
             if optional_field in self.fields:
                 self.fields[optional_field].required = False
 
@@ -158,20 +35,10 @@ class FlockMemberForm(forms.ModelForm):
             'wins',
             'losses',
             'draws',
-            'conditioning_start_date',
-            'conditioning_target_date',
-            'target_weight_grams',
-            'conditioning_program',
-            'conditioning_feed_plan',
-            'conditioning_phase',
-            'conditioning_notes',
             'image',
         ]
         widgets = {
             'birth_date': forms.DateInput(attrs={'type': 'date'}),
-            'conditioning_start_date': forms.DateInput(attrs={'type': 'date'}),
-            'conditioning_target_date': forms.DateInput(attrs={'type': 'date'}),
-            'conditioning_notes': forms.Textarea(attrs={'rows': 2}),
         }
 
     def clean_tag_number(self):
@@ -196,40 +63,6 @@ class FlockMemberForm(forms.ModelForm):
     def clean_dam(self):
         return (self.cleaned_data.get('dam') or '').strip()
 
-    def clean(self):
-        cleaned_data = super().clean()
-
-        if cleaned_data.get('conditioning_feed_plan') == 'Custom':
-            custom_feed = (
-                cleaned_data.get('conditioning_feed_plan_custom') or ''
-            ).strip()
-            if not custom_feed:
-                self.add_error(
-                    'conditioning_feed_plan_custom',
-                    'Enter the custom diet plan.',
-                )
-            else:
-                cleaned_data['conditioning_feed_plan'] = custom_feed
-
-        if cleaned_data.get('status') == 'Conditioning':
-            for field_name, label in self.CONDITIONING_REQUIRED_FIELDS:
-                value = cleaned_data.get(field_name)
-                if value in (None, ''):
-                    self.add_error(
-                        field_name,
-                        f'{label} is required when the bird is in conditioning.',
-                    )
-
-        for field_name in ('conditioning_program', 'conditioning_feed_plan'):
-            if cleaned_data.get(field_name) is not None:
-                cleaned_data[field_name] = cleaned_data[field_name].strip()
-
-        if not cleaned_data.get('conditioning_phase'):
-            cleaned_data['conditioning_phase'] = 'foundation'
-
-        _validate_conditioning_values(cleaned_data, self.add_error)
-        return cleaned_data
-
     def clean_image(self):
         image = self.cleaned_data.get('image')
         if image and hasattr(image, 'name'):
@@ -240,33 +73,6 @@ class FlockMemberForm(forms.ModelForm):
             if image.size > 5 * 1024 * 1024:
                 raise forms.ValidationError('Image file must be under 5 MB.')
         return image
-
-
-class ConditioningSessionForm(forms.ModelForm):
-    """Validate a planned or completed step in a bird's conditioning plan."""
-
-    class Meta:
-        model = ConditioningSession
-        fields = [
-            'phase', 'session_type', 'title', 'scheduled_date',
-            'status', 'duration_minutes', 'notes',
-        ]
-        widgets = {
-            'scheduled_date': forms.DateInput(attrs={'type': 'date'}),
-            'notes': forms.Textarea(attrs={'rows': 2}),
-        }
-
-    def clean_title(self):
-        title = (self.cleaned_data.get('title') or '').strip()
-        if not title:
-            raise forms.ValidationError('Session title is required.')
-        return title
-
-    def clean_scheduled_date(self):
-        scheduled_date = self.cleaned_data.get('scheduled_date')
-        if scheduled_date and scheduled_date > timezone.localdate() + timedelta(days=365):
-            raise forms.ValidationError('Schedule sessions within the next year.')
-        return scheduled_date
 
 
 class HealthRecordForm(forms.ModelForm):
@@ -306,6 +112,7 @@ class MedicineForm(forms.ModelForm):
             'unit',
             'stock_quantity',
             'low_stock_threshold',
+            'unit_cost',
             'expiration_date',
             'notes',
         ]
@@ -313,6 +120,7 @@ class MedicineForm(forms.ModelForm):
             'expiration_date': forms.DateInput(attrs={'type': 'date'}),
             'stock_quantity': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
             'low_stock_threshold': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
+            'unit_cost': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
         }
 
     def clean_name(self):
@@ -338,6 +146,14 @@ class MedicineForm(forms.ModelForm):
         if threshold is None or threshold < 0:
             raise forms.ValidationError('Low stock threshold cannot be negative.')
         return threshold
+
+    def clean_unit_cost(self):
+        unit_cost = self.cleaned_data.get('unit_cost')
+        if unit_cost is None:
+            return 0
+        if unit_cost < 0:
+            raise forms.ValidationError('Cost per unit cannot be negative.')
+        return unit_cost
 
 
 class FightRecordForm(forms.ModelForm):
@@ -461,7 +277,9 @@ class ClutchRecordForm(forms.ModelForm):
         return cleaned_data
 
 
-class FinancialEntryForm(forms.ModelForm):
+class ExpenseForm(forms.ModelForm):
+    """Validate an expense tied to one of the user's flock members."""
+
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
@@ -469,15 +287,21 @@ class FinancialEntryForm(forms.ModelForm):
             self.fields['bird'].queryset = FlockMember.objects.filter(user=self.user).order_by('tag_number')
         else:
             self.fields['bird'].queryset = FlockMember.objects.none()
-        self.fields['bird'].required = False
+        self.fields['bird'].required = True
 
     class Meta:
-        model = FinancialEntry
-        fields = ['entry_type', 'category', 'amount', 'date', 'description', 'bird', 'notes']
+        model = Expense
+        fields = ['bird', 'category', 'amount', 'date', 'description', 'notes']
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
             'amount': forms.NumberInput(attrs={'min': '0.01', 'step': '0.01'}),
         }
+
+    def clean_bird(self):
+        bird = self.cleaned_data.get('bird')
+        if bird is None:
+            raise forms.ValidationError('Select the flock member this expense belongs to.')
+        return bird
 
     def clean_description(self):
         description = (self.cleaned_data.get('description') or '').strip()
@@ -490,64 +314,3 @@ class FinancialEntryForm(forms.ModelForm):
         if amount is None or amount <= 0:
             raise forms.ValidationError('Amount must be greater than zero.')
         return amount
-
-    def clean(self):
-        cleaned_data = super().clean()
-        entry_type = cleaned_data.get('entry_type')
-        category = cleaned_data.get('category')
-        if entry_type and category:
-            valid = FinancialEntry.EXPENSE_CATEGORIES if entry_type == FinancialEntry.TYPE_EXPENSE else FinancialEntry.INCOME_CATEGORIES
-            valid_keys = {k for k, _ in valid}
-            if category not in valid_keys:
-                cleaned_data['category'] = 'Other' if entry_type == FinancialEntry.TYPE_EXPENSE else 'Other'
-        return cleaned_data
-
-
-class FlockSaleForm(forms.ModelForm):
-    """Validate a bird sale before it is synced to the finance tracker."""
-
-    def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop('user', None)
-        super().__init__(*args, **kwargs)
-        if self.user is not None and not getattr(self.user, 'is_anonymous', False):
-            self.fields['bird'].queryset = FlockMember.objects.filter(
-                user=self.user
-            ).order_by('tag_number')
-        else:
-            self.fields['bird'].queryset = FlockMember.objects.none()
-        self.fields['bird'].required = True
-        self.fields['buyer_contact'].required = False
-        self.fields['notes'].required = False
-
-    class Meta:
-        model = FlockSale
-        fields = ['bird', 'buyer_name', 'buyer_contact', 'sale_date', 'amount', 'notes']
-        widgets = {
-            'sale_date': forms.DateInput(attrs={'type': 'date'}),
-            'amount': forms.NumberInput(attrs={'min': '0.01', 'step': '0.01'}),
-            'notes': forms.Textarea(attrs={'rows': 2}),
-        }
-
-    def clean_bird(self):
-        bird = self.cleaned_data.get('bird')
-        if bird is None:
-            raise forms.ValidationError('Select the bird that was sold.')
-        return bird
-
-    def clean_buyer_name(self):
-        buyer_name = (self.cleaned_data.get('buyer_name') or '').strip()
-        if not buyer_name:
-            raise forms.ValidationError('Buyer name is required.')
-        return buyer_name
-
-    def clean_amount(self):
-        amount = self.cleaned_data.get('amount')
-        if amount is None or amount <= 0:
-            raise forms.ValidationError('Sale amount must be greater than zero.')
-        return amount
-
-    def clean_sale_date(self):
-        sale_date = self.cleaned_data.get('sale_date')
-        if sale_date and sale_date > timezone.localdate():
-            raise forms.ValidationError('Sale date cannot be in the future.')
-        return sale_date

@@ -13,9 +13,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from apps.core.scoping import scoped_flock_members
-from apps.info.models import (
-    FinancialEntry, FlockSale, HealthRecord, Medicine, conditioning_session_counts,
-)
+from apps.info.models import Expense, HealthRecord, Medicine
 
 User = get_user_model()
 MAX_FAILED_ATTEMPTS = 5
@@ -176,7 +174,6 @@ def home(request):
     stats = members.aggregate(
         total_birds=Count('id'),
         active_birds=Count('id', filter=Q(status='Active')),
-        conditioning_birds=Count('id', filter=Q(status='Conditioning')),
         retired_birds=Count('id', filter=Q(status='Retired')),
         total_wins=Sum('wins'),
         total_losses=Sum('losses'),
@@ -184,20 +181,17 @@ def home(request):
     )
     total_birds = stats['total_birds'] or 0
     active_birds = stats['active_birds'] or 0
-    conditioning_birds = stats['conditioning_birds'] or 0
     retired_birds = stats['retired_birds'] or 0
     total_wins = stats['total_wins'] or 0
     total_losses = stats['total_losses'] or 0
     total_draws = stats['total_draws'] or 0
     total_fights = total_wins + total_losses + total_draws
-    win_rate = round(total_wins / total_fights * 100) if total_fights else 0
 
     def _pct(value):
         return round(value / total_birds * 100) if total_birds else 0
 
-    other_birds = max(total_birds - active_birds - conditioning_birds - retired_birds, 0)
+    other_birds = max(total_birds - active_birds - retired_birds, 0)
     active_pct = _pct(active_birds)
-    conditioning_pct = _pct(conditioning_birds)
     retired_pct = _pct(retired_birds)
 
     upcoming_qs = HealthRecord.objects.filter(
@@ -215,8 +209,6 @@ def home(request):
     )
     overdue_records = overdue_qs.select_related('bird').order_by('next_due_date')[:5]
 
-    conditioning_due = conditioning_session_counts(request.user, today)
-
     medicine_expiry_cutoff = today + timedelta(days=30)
     medicine_alert_count = Medicine.objects.filter(user=request.user).filter(
         Q(stock_quantity__lte=F('low_stock_threshold')) |
@@ -224,43 +216,33 @@ def home(request):
         Q(expiration_date__gte=today, expiration_date__lte=medicine_expiry_cutoff)
     ).count()
 
-    finance_totals = FinancialEntry.objects.filter(user=request.user).aggregate(
-        total_income=Sum('amount', filter=Q(entry_type=FinancialEntry.TYPE_INCOME)),
-        total_expenses=Sum('amount', filter=Q(entry_type=FinancialEntry.TYPE_EXPENSE)),
+    month_start = today.replace(day=1)
+    expense_totals = Expense.objects.filter(user=request.user).aggregate(
+        total=Sum('amount'),
+        month_total=Sum('amount', filter=Q(date__gte=month_start)),
+        entries=Count('id'),
+        flock_count=Count('bird', distinct=True),
     )
-    finance_income = finance_totals['total_income'] or 0
-    finance_expenses = finance_totals['total_expenses'] or 0
-
-    sales_totals = FlockSale.objects.filter(user=request.user).aggregate(
-        total_sales=Sum('amount'),
-        sales_count=Count('id'),
-    )
-    finance_sales = sales_totals['total_sales'] or 0
+    expense_total = expense_totals['total'] or 0
+    expense_month = expense_totals['month_total'] or 0
 
     context = {
-        'finance_income': finance_income,
-        'finance_expenses': finance_expenses,
-        'finance_sales': finance_sales,
-        'finance_sales_count': sales_totals['sales_count'] or 0,
-        'finance_net': finance_income - finance_expenses,
+        'expense_total': expense_total,
+        'expense_month': expense_month,
+        'expense_count': expense_totals['entries'] or 0,
+        'expense_flock_count': expense_totals['flock_count'] or 0,
         'total_birds': total_birds,
         'active_birds': active_birds,
-        'conditioning_birds': conditioning_birds,
-        'conditioning_due_sessions': conditioning_due['due_today'],
-        'conditioning_overdue_sessions': conditioning_due['overdue'],
-        'conditioning_upcoming_sessions': conditioning_due['upcoming'],
         'retired_birds': retired_birds,
         'active_pct': active_pct,
-        'conditioning_pct': conditioning_pct,
         'retired_pct': retired_pct,
         'other_birds': other_birds,
-        'other_pct': max(100 - active_pct - conditioning_pct - retired_pct, 0),
+        'other_pct': max(100 - active_pct - retired_pct, 0),
         'breed_count': members.exclude(breed__isnull=True).values('breed').distinct().count(),
         'total_wins': total_wins,
         'total_losses': total_losses,
         'total_draws': total_draws,
         'total_fights': total_fights,
-        'win_rate': win_rate,
         'recent_members': members.select_related('breed').order_by('-created_at')[:5],
         'upcoming_records': upcoming_records,
         'upcoming_count': upcoming_qs.count(),

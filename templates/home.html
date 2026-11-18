@@ -14,7 +14,6 @@
         </p>
         <div class="dh-hero-stats">
           <span class="dh-hero-stat"><span class="dh-status-dot"></span><strong>{{ active_birds }}</strong> active</span>
-          <span class="dh-hero-stat is-warning"><span class="dh-status-dot"></span><strong>{{ conditioning_birds }}</strong> conditioning{% if conditioning_overdue_sessions %} • {{ conditioning_overdue_sessions }} session{{ conditioning_overdue_sessions|pluralize }} overdue{% endif %}</span>
           {% if overdue_count %}
           <span class="dh-hero-stat is-danger"><span class="dh-status-dot"></span><strong>{{ overdue_count }}</strong> overdue task{{ overdue_count|pluralize }}</span>
           {% else %}
@@ -44,7 +43,7 @@
   {% endif %}
 
   <div class="row row-cards g-4">
-    <div class="col-6 col-lg-3">
+    <div class="col-sm-6">
       <div class="card stat-card stat-card-primary text-white">
         <div class="card-body">
           <div class="d-flex align-items-center justify-content-between">
@@ -61,7 +60,7 @@
         </div>
       </div>
     </div>
-    <div class="col-6 col-lg-3">
+    <div class="col-sm-6">
       <div class="card stat-card stat-card-success text-white">
         <div class="card-body">
           <div class="d-flex align-items-center justify-content-between">
@@ -74,49 +73,6 @@
               </div>
             </div>
             <span class="stat-card-icon"><i class="fas fa-heart-pulse"></i></span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-lg-3">
-      <a href="{% url 'info:conditioning_list' %}"
-         class="card stat-card stat-card-warning text-white text-decoration-none h-100"
-         title="View birds in conditioning"
-         aria-label="View {{ conditioning_birds }} bird{{ conditioning_birds|pluralize }} in conditioning">
-        <div class="card-body">
-          <div class="d-flex align-items-center justify-content-between">
-            <div>
-              <div class="h2 mb-1">{{ conditioning_birds }}</div>
-              <div class="tracking-wide text-white-50">In conditioning</div>
-              <div class="dh-stat-meta">
-                <i class="fas fa-dumbbell"></i>
-                {{ conditioning_pct }}% of the flock
-                {% if conditioning_overdue_sessions %}
-                • {{ conditioning_overdue_sessions }} session{{ conditioning_overdue_sessions|pluralize }} overdue
-                {% elif conditioning_due_sessions %}
-                • {{ conditioning_due_sessions }} due today
-                {% endif %}
-                <i class="fas fa-arrow-right ms-1"></i>
-              </div>
-            </div>
-            <span class="stat-card-icon"><i class="fas fa-dumbbell"></i></span>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="card stat-card stat-card-info text-white">
-        <div class="card-body">
-          <div class="d-flex align-items-center justify-content-between">
-            <div>
-              <div class="h2 mb-1">{{ win_rate }}%</div>
-              <div class="tracking-wide text-white-50">Win rate</div>
-              <div class="dh-stat-meta">
-                <i class="fas fa-trophy"></i>
-                {{ total_wins }}W – {{ total_losses }}L{% if total_draws %} – {{ total_draws }}D{% endif %}
-              </div>
-            </div>
-            <span class="stat-card-icon"><i class="fas fa-trophy"></i></span>
           </div>
         </div>
       </div>
@@ -158,8 +114,6 @@
                 <td data-label="Status">
                   {% if bird.status == 'Active' %}
                   <span class="dh-status is-active"><span class="dh-status-dot"></span>{{ bird.status }}</span>
-                  {% elif bird.status == 'Conditioning' %}
-                  <span class="dh-status is-warning"><span class="dh-status-dot"></span>{{ bird.status }}</span>
                   {% elif bird.status == 'Retired' %}
                   <span class="dh-status is-muted"><span class="dh-status-dot"></span>{{ bird.status }}</span>
                   {% else %}
@@ -253,7 +207,7 @@
             <div class="dh-donut"
                  role="img"
                  aria-label="Flock status breakdown"
-                 style="--p-active: {{ active_pct }}; --p-conditioning: {{ conditioning_pct }}; --p-retired: {{ retired_pct }};">
+                 style="--p-active: {{ active_pct }}; --p-retired: {{ retired_pct }};">
               <div class="dh-donut-center">
                 <strong class="dh-metric-value">{{ total_birds }}</strong>
                 <span class="dh-metric-label">Total birds</span>
@@ -264,11 +218,6 @@
                 <span class="dh-legend-icon is-success"><i class="fas fa-circle-check"></i></span>
                 <span class="dh-legend-label">Active</span>
                 <span class="dh-legend-value">{{ active_birds }}</span>
-              </div>
-              <div class="dh-legend-item">
-                <span class="dh-legend-icon is-warning"><i class="fas fa-dumbbell"></i></span>
-                <span class="dh-legend-label">Conditioning</span>
-                <span class="dh-legend-value">{{ conditioning_birds }}</span>
               </div>
               <div class="dh-legend-item">
                 <span class="dh-legend-icon is-info"><i class="fas fa-moon"></i></span>
@@ -293,46 +242,28 @@
           <span class="badge bg-secondary-lt text-secondary ms-auto">{{ total_fights }} fight{{ total_fights|pluralize }}</span>
         </div>
         <div class="card-body">
-          <div class="d-flex align-items-center gap-4 flex-wrap">
-            <div class="dh-win-ring" style="--value: {{ win_rate }};" role="img"
-                 aria-label="{{ win_rate }}% win rate">
-              <span class="dh-metric-value">{{ win_rate }}%</span>
+          <div class="dh-metric-list">
+            <div class="dh-record-row">
+              <span class="dh-record-label">
+                <span class="dh-status-badge is-success"><i class="fas fa-trophy"></i></span>
+                <span class="dh-metric-label mb-0">Wins</span>
+              </span>
+              <span class="dh-metric-value-sm text-success">{{ total_wins }}</span>
             </div>
-            <div class="flex-grow-1 dh-metric-list">
-              <div class="dh-record-row">
-                <span class="dh-record-label">
-                  <span class="dh-status-badge is-success"><i class="fas fa-trophy"></i></span>
-                  <span class="dh-metric-label mb-0">Wins</span>
-                </span>
-                <span class="dh-metric-value-sm text-success">{{ total_wins }}</span>
-              </div>
-              <div class="dh-record-row">
-                <span class="dh-record-label">
-                  <span class="dh-status-badge is-danger"><i class="fas fa-xmark"></i></span>
-                  <span class="dh-metric-label mb-0">Losses</span>
-                </span>
-                <span class="dh-metric-value-sm text-danger">{{ total_losses }}</span>
-              </div>
-              <div class="dh-record-row">
-                <span class="dh-record-label">
-                  <span class="dh-status-badge is-warning"><i class="fas fa-handshake"></i></span>
-                  <span class="dh-metric-label mb-0">Draws</span>
-                </span>
-                <span class="dh-metric-value-sm text-warning">{{ total_draws }}</span>
-              </div>
-              <div class="dh-record-row">
-                <span class="dh-record-label">
-                  <span class="dh-status-badge is-primary"><i class="fas fa-chart-line"></i></span>
-                  <span class="dh-metric-label mb-0">Win rate</span>
-                </span>
-                <span class="dh-metric-value-sm">{{ win_rate }}%</span>
-              </div>
+            <div class="dh-record-row">
+              <span class="dh-record-label">
+                <span class="dh-status-badge is-danger"><i class="fas fa-xmark"></i></span>
+                <span class="dh-metric-label mb-0">Losses</span>
+              </span>
+              <span class="dh-metric-value-sm text-danger">{{ total_losses }}</span>
             </div>
-          </div>
-          <div class="progress mt-3" style="height: 8px;" role="progressbar"
-               aria-label="Flock win rate" aria-valuenow="{{ win_rate }}"
-               aria-valuemin="0" aria-valuemax="100">
-            <div class="progress-bar bg-success" style="width: {{ win_rate }}%;"></div>
+            <div class="dh-record-row">
+              <span class="dh-record-label">
+                <span class="dh-status-badge is-warning"><i class="fas fa-handshake"></i></span>
+                <span class="dh-metric-label mb-0">Draws</span>
+              </span>
+              <span class="dh-metric-value-sm text-warning">{{ total_draws }}</span>
+            </div>
           </div>
           <div class="dh-metric-label mt-2">Across {{ total_birds }} bird{{ total_birds|pluralize }}</div>
         </div>
@@ -342,43 +273,43 @@
     <div class="col-lg-3">
       <div class="card dh-summary-card h-100">
         <div class="card-header d-flex align-items-center">
-          <h3 class="card-title mb-0">Finance summary</h3>
-          <a href="{% url 'info:finance_list' %}" class="btn btn-sm btn-outline-primary ms-auto">Open</a>
+          <h3 class="card-title mb-0">Expense summary</h3>
+          <a href="{% url 'info:expense_list' %}" class="btn btn-sm btn-outline-primary ms-auto">Open</a>
         </div>
         <div class="card-body">
           <div class="dh-metric-list">
             <div class="dh-record-row">
               <span class="dh-record-label">
-                <span class="dh-status-badge is-success"><i class="fas fa-arrow-trend-up"></i></span>
-                <span class="dh-metric-label mb-0">Total income</span>
-              </span>
-              <span class="dh-metric-value-sm text-success">₱{{ finance_income|floatformat:2 }}</span>
-            </div>
-            <div class="dh-record-row">
-              <span class="dh-record-label">
-                <span class="dh-status-badge is-danger"><i class="fas fa-arrow-trend-down"></i></span>
+                <span class="dh-status-badge is-danger"><i class="fas fa-receipt"></i></span>
                 <span class="dh-metric-label mb-0">Total expenses</span>
               </span>
-              <span class="dh-metric-value-sm text-danger">₱{{ finance_expenses|floatformat:2 }}</span>
+              <span class="dh-metric-value-sm text-danger">₱{{ expense_total|floatformat:2 }}</span>
             </div>
             <div class="dh-record-row">
               <span class="dh-record-label">
-                <span class="dh-status-badge is-info"><i class="fas fa-tags"></i></span>
-                <a class="dh-metric-label mb-0 text-decoration-none" href="{% url 'info:sales_list' %}">Bird sales</a>
+                <span class="dh-status-badge is-warning"><i class="fas fa-calendar-days"></i></span>
+                <span class="dh-metric-label mb-0">This month</span>
               </span>
-              <span class="dh-metric-value-sm">₱{{ finance_sales|floatformat:2 }}</span>
+              <span class="dh-metric-value-sm text-danger">₱{{ expense_month|floatformat:2 }}</span>
             </div>
             <div class="dh-record-row">
               <span class="dh-record-label">
-                <span class="dh-status-badge is-primary"><i class="fas fa-scale-balanced"></i></span>
-                <span class="dh-metric-label mb-0">Net balance</span>
+                <span class="dh-status-badge is-info"><i class="fas fa-dove"></i></span>
+                <span class="dh-metric-label mb-0">Flock members with expenses</span>
               </span>
-              <span class="dh-metric-value-sm {% if finance_net >= 0 %}text-success{% else %}text-danger{% endif %}">₱{{ finance_net|floatformat:2 }}</span>
+              <span class="dh-metric-value-sm">{{ expense_flock_count }}</span>
+            </div>
+            <div class="dh-record-row">
+              <span class="dh-record-label">
+                <span class="dh-status-badge is-primary"><i class="fas fa-list-check"></i></span>
+                <span class="dh-metric-label mb-0">Expense entries</span>
+              </span>
+              <span class="dh-metric-value-sm">{{ expense_count }}</span>
             </div>
           </div>
           <div class="dh-metric-label mt-3">
-            Track feed, medicine, entry fees, sales, and prizes per bird.
-            <a href="{% url 'info:sales_list' %}" class="text-decoration-none">View {{ finance_sales_count }} sale{{ finance_sales_count|pluralize }} <i class="fas fa-arrow-right ms-1"></i></a>
+            Track feed, medicine, equipment, entry fees, and other costs for every flock member.
+            <a href="{% url 'info:expense_list' %}" class="text-decoration-none">View expenses <i class="fas fa-arrow-right ms-1"></i></a>
           </div>
         </div>
       </div>
@@ -403,13 +334,9 @@
               <i class="fas fa-prescription-bottle-medical"></i>
               <span>Medicine cabinet</span>
             </a>
-            <a href="{% url 'info:finance_list' %}" class="dh-quick-action">
-              <i class="fas fa-wallet"></i>
-              <span>Finance tracker</span>
-            </a>
-            <a href="{% url 'info:sales_list' %}" class="dh-quick-action">
-              <i class="fas fa-tags"></i>
-              <span>Sales ledger</span>
+            <a href="{% url 'info:expense_list' %}" class="dh-quick-action">
+              <i class="fas fa-receipt"></i>
+              <span>Expense tracker</span>
             </a>
             {% if user.is_superuser %}
             <a href="{% url 'users:user_list' %}" class="dh-quick-action">
