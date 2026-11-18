@@ -62,11 +62,8 @@ class FlockMember(models.Model):
     cage_number = models.CharField(max_length=50, blank=True, help_text="Pen, cord, or coop identifier")
     image = models.FileField(upload_to='birds/', blank=True, null=True, help_text="Photo of bird")
 
-    # Performance & Weight
+    # Weight tracking
     weight_grams = models.PositiveIntegerField(null=True, blank=True, help_text="Weight in grams")
-    wins = models.PositiveIntegerField(default=0, blank=True)
-    losses = models.PositiveIntegerField(default=0, blank=True)
-    draws = models.PositiveIntegerField(default=0, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -83,12 +80,17 @@ class FlockMember(models.Model):
     def __str__(self):
         return f"{self.tag_number} - {self.gender} ({self.status})"
 
-    @property
-    def total_fights(self):
-        return self.wins + self.losses + self.draws
-
 
 class Medicine(models.Model):
+    """An inventory item: medicine cabinet, feeds, equipment, or farm supplies."""
+
+    ITEM_TYPE_CHOICES = [
+        ('medicine', 'Medicine Cabinet'),
+        ('feed', 'Feeds & Nutrition'),
+        ('equipment', 'Equipment'),
+        ('supply', 'Other Supplies'),
+    ]
+
     CATEGORY_CHOICES = [
         ('Vaccine', 'Vaccine'),
         ('Dewormer', 'Dewormer'),
@@ -100,13 +102,19 @@ class Medicine(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='medicines')
     name = models.CharField(max_length=120)
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='Vaccine')
-    unit = models.CharField(max_length=20, default='ml')
+    item_type = models.CharField(
+        max_length=20,
+        choices=ITEM_TYPE_CHOICES,
+        default='medicine',
+        help_text='Inventory section: medicine, feed, equipment, or other supply.',
+    )
+    category = models.CharField(max_length=50, default='Other')
+    unit = models.CharField(max_length=30, default='pcs')
     stock_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     low_stock_threshold = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     unit_cost = models.DecimalField(
         max_digits=10, decimal_places=2, default=0, blank=True,
-        help_text='Cost per unit in Philippine pesos.',
+        help_text='Cost / price per unit in Philippine pesos (₱).',
     )
     expiration_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
@@ -115,6 +123,7 @@ class Medicine(models.Model):
     class Meta:
         ordering = ['name']
         indexes = [
+            models.Index(fields=['user', 'item_type']),
             models.Index(fields=['user', 'expiration_date']),
         ]
 
@@ -125,6 +134,14 @@ class Medicine(models.Model):
     def total_value(self):
         """Current stock value based on the per-unit cost."""
         return (self.stock_quantity or 0) * (self.unit_cost or 0)
+
+    @property
+    def type_display(self):
+        return dict(self.ITEM_TYPE_CHOICES).get(self.item_type, 'Medicine')
+
+
+# Model alias for clean domain naming
+InventoryItem = Medicine
 
 
 class HealthRecord(models.Model):
@@ -138,6 +155,15 @@ class HealthRecord(models.Model):
     bird = models.ForeignKey(FlockMember, on_delete=models.CASCADE, related_name='health_records')
     record_type = models.CharField(max_length=20, choices=RECORD_TYPES)
     title = models.CharField(max_length=100)
+    medicine = models.ForeignKey(
+        'Medicine', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='health_records',
+        help_text='Cabinet medicine used for this treatment (optional).',
+    )
+    quantity_used = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0, blank=True,
+        help_text='Amount taken from the medicine cabinet stock.',
+    )
     date_administered = models.DateField()
     next_due_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
@@ -151,33 +177,6 @@ class HealthRecord(models.Model):
 
     def __str__(self):
         return f"{self.bird.tag_number} - {self.title}"
-
-
-class FightRecord(models.Model):
-    RESULT_CHOICES = [
-        ('win', 'Win'),
-        ('loss', 'Loss'),
-        ('draw', 'Draw / Tinabla'),
-        ('cancelled', 'Cancelled'),
-    ]
-
-    bird = models.ForeignKey(FlockMember, on_delete=models.CASCADE, related_name='fight_records')
-    event_name = models.CharField(max_length=150, help_text="Derby, Hackfight, or Event name")
-    fight_date = models.DateField()
-    weight_grams = models.PositiveIntegerField(null=True, blank=True, help_text="Weight at fight time in grams")
-    opponent = models.CharField(max_length=150, blank=True, help_text="Opponent tag or farm name")
-    gaff_type = models.CharField(max_length=100, blank=True, help_text="Slasher knife specs")
-    result = models.CharField(max_length=10, choices=RESULT_CHOICES)
-    duration_seconds = models.PositiveIntegerField(null=True, blank=True, help_text="Duration in seconds")
-    video_url = models.URLField(blank=True, help_text="Link to fight video / recording")
-    notes = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-fight_date', '-created_at']
-
-    def __str__(self):
-        return f"{self.bird.tag_number} - {self.event_name} ({self.get_result_display()})"
 
 
 class WeightLog(models.Model):
@@ -271,41 +270,3 @@ class ClutchRecord(models.Model):
         if self.fertile_eggs > 0:
             return round((self.hatched_count / self.fertile_eggs) * 100, 1)
         return 0.0
-
-
-class Expense(models.Model):
-    """An expense recorded against one of the user's flock members."""
-
-    CATEGORY_CHOICES = [
-        ('Feed', 'Feed & Supplements'),
-        ('Medicine', 'Medicine & Health'),
-        ('Equipment', 'Equipment & Supplies'),
-        ('Transport', 'Transport'),
-        ('Entry Fee', 'Entry Fee'),
-        ('Labor', 'Labor'),
-        ('Utilities', 'Utilities'),
-        ('Other', 'Other Expense'),
-    ]
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='expenses')
-    bird = models.ForeignKey(
-        'FlockMember', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='expenses',
-        help_text='Flock member this expense belongs to.',
-    )
-    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='Feed')
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    date = models.DateField()
-    description = models.CharField(max_length=200)
-    notes = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-date', '-created_at']
-        indexes = [
-            models.Index(fields=['user', 'date'], name='info_expense_user_date_idx'),
-            models.Index(fields=['user', 'bird'], name='info_expense_user_bird_idx'),
-        ]
-
-    def __str__(self):
-        return f"{self.amount} - {self.description}"

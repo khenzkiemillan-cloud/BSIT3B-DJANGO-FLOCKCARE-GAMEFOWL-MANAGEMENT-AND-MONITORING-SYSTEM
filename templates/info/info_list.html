@@ -11,7 +11,7 @@
     <div class="page-pretitle">Flock management</div>
     <h2 class="page-title mb-0">Flock members</h2>
     <p class="dh-page-subtitle">
-      Track tag numbers, breeding, and fight records for every bird in your flock.
+      Track tag numbers, breeding, health, and performance for every bird in your flock.
     </p>
   </div>
 
@@ -174,15 +174,7 @@
             <td class="text-muted" data-label="Birth date">{{ bird.birth_date|date:"M j, Y"|default:"—" }}</td>
             <td class="text-end text-muted" data-label="Weight">{{ bird.weight_grams|default:"—" }}{% if bird.weight_grams %} g{% endif %}</td>
             <td class="text-end" data-label="Record">
-              <span class="dh-record">
-                <span class="dh-record-wins">{{ bird.wins }}W</span>
-                <span class="dh-record-sep">–</span>
-                <span class="dh-record-losses">{{ bird.losses }}L</span>
-                {% if bird.draws %}
-                <span class="dh-record-sep">–</span>
-                <span class="text-muted">{{ bird.draws }}D</span>
-                {% endif %}
-              </span>
+              <span class="text-muted">—</span>
             </td>
             <td data-label="Actions">
               <div class="dh-row-actions">
@@ -202,25 +194,11 @@
                         data-cage-number="{{ bird.cage_number|default:'' }}"
                         data-birth-date="{{ bird.birth_date|date:'Y-m-d' }}"
                         data-weight="{{ bird.weight_grams|default:'' }}"
-                        data-wins="{{ bird.wins }}"
-                        data-losses="{{ bird.losses }}"
-                        data-draws="{{ bird.draws }}"
                         data-sire="{{ bird.sire|default:'' }}"
                         data-dam="{{ bird.dam|default:'' }}"
                         title="Edit"
                         aria-label="Edit {{ bird.tag_number }}">
                   <i class="fas fa-edit text-primary"></i>
-                </button>
-                <button type="button"
-                        class="btn btn-ghost-secondary btn-icon btn-sm"
-                        data-bs-toggle="modal"
-                        data-bs-target="#fightModal"
-                        data-id="{{ bird.id }}"
-                        data-tag-number="{{ bird.tag_number }}"
-                        data-fights-url="{% url 'info:fight_records_ajax' bird.id %}"
-                        title="Fight history"
-                        aria-label="Fight history for {{ bird.tag_number }}">
-                  <i class="fas fa-trophy text-warning"></i>
                 </button>
                 <button type="button"
                         class="btn btn-ghost-secondary btn-icon btn-sm"
@@ -255,12 +233,6 @@
                         aria-label="Pedigree for {{ bird.tag_number }}">
                   <i class="fas fa-sitemap text-info"></i>
                 </button>
-                <a href="{% url 'info:expense_list' %}?bird={{ bird.id }}"
-                   class="btn btn-ghost-secondary btn-icon btn-sm"
-                   title="Expenses"
-                   aria-label="Expenses for {{ bird.tag_number }}">
-                  <i class="fas fa-receipt text-danger"></i>
-                </a>
                 <a href="{% url 'info:pedigree_certificate' bird.id %}"
                    target="_blank"
                    class="btn btn-ghost-secondary btn-icon btn-sm"
@@ -467,28 +439,16 @@
               </div>
 
               <div class="dh-form-tab-pane" id="memberTabPerformance" data-form-tab-pane role="tabpanel" aria-labelledby="memberTabPerformanceBtn" aria-hidden="true" hidden>
-                <div class="dh-form-section-title mb-3">Weight &amp; fight record</div>
+                <div class="dh-form-section-title mb-3">Weight record</div>
                 <div class="row g-4 dh-form-grid">
                   <div class="col-md-6">
                     <label class="form-label">Current weight (grams)</label>
                     <input type="number" name="weight_grams" id="member_weight" class="form-control" min="0" step="1">
                   </div>
-                  <div class="col-md-6">
-                    <label class="form-label">Wins</label>
-                    <input type="number" name="wins" id="member_wins" class="form-control" min="0" value="0">
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label">Losses</label>
-                    <input type="number" name="losses" id="member_losses" class="form-control" min="0" value="0">
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label">Draws (Tinabla)</label>
-                    <input type="number" name="draws" id="member_draws" class="form-control" min="0" value="0">
-                  </div>
                   <div class="col-12">
                     <div class="alert alert-info py-2 small mb-0">
                       <i class="fas fa-circle-info me-1"></i>
-                      Use the <strong>scale</strong> and <strong>trophy</strong> icons in the flock table to log weights and sanctioned fights. Health and medicine records are logged from their own pages.
+                      Use the <strong>scale</strong> icon in the flock table to log weights. Health and medicine records are logged from their own pages.
                     </div>
                   </div>
                 </div>
@@ -631,23 +591,17 @@
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Medicine / treatment used</label>
-                  <select id="bird_medicine_picker" class="form-select">
-                    <option value="">Select a medicine</option>
+                  <select name="medicine" id="bird_medicine_picker" class="form-select">
+                    <option value="">No cabinet medicine</option>
                     <optgroup label="My medicine cabinet">
                       {% for med in medicine_options %}
                       {% if med.in_cabinet %}
-                      <option value="{{ med.name }}" data-record-type="{{ med.record_type }}">{{ med.name }} — {{ med.category }}</option>
-                      {% endif %}
-                      {% endfor %}
-                    </optgroup>
-                    <optgroup label="Common vaccines &amp; treatments">
-                      {% for med in medicine_options %}
-                      {% if not med.in_cabinet %}
-                      <option value="{{ med.name }}" data-record-type="{{ med.record_type }}">{{ med.name }} — {{ med.category }}</option>
+                      <option value="{{ med.id }}" data-name="{{ med.name }}" data-record-type="{{ med.record_type }}" data-stock="{{ med.stock_quantity }}" data-unit="{{ med.unit }}">{{ med.name }} — {{ med.stock_quantity }} {{ med.unit }} in stock</option>
                       {% endif %}
                       {% endfor %}
                     </optgroup>
                   </select>
+                  <small class="form-hint" id="bird_medicine_hint">Optional. Selecting a cabinet item lets the system deduct stock.</small>
                 </div>
                 <div class="col-md-6">
                   <label class="form-label required">Title</label>
@@ -657,6 +611,11 @@
                     <option value="{{ med.name }}"></option>
                     {% endfor %}
                   </datalist>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Quantity used (<span id="health_quantity_unit">unit</span>)</label>
+                  <input type="number" name="quantity_used" id="health_quantity_used" class="form-control" min="0" step="0.01" value="0">
+                  <small class="form-hint">Deducts from the selected cabinet medicine stock.</small>
                 </div>
               </div>
               <div class="dh-form-tab-actions">
@@ -763,90 +722,6 @@
           <i class="fas fa-circle-info me-1"></i>
           Grandparents appear when the sire or dam tag belongs to a bird in your flock.
         </p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Fight Records Modal -->
-<div class="modal modal-blur fade" id="fightModal" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <span class="dh-modal-icon is-warning"><i class="fas fa-trophy"></i></span>
-        <h5 class="modal-title">Fight History — <span id="fightBirdTag"></span></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div id="fightError" class="alert alert-danger d-none"></div>
-
-        <div class="mb-3 p-3 bg-light-lt rounded">
-          <div class="text-muted small text-uppercase">Career Record</div>
-          <div class="h3 mb-0" id="fightCareerRecord">0W – 0L – 0D</div>
-        </div>
-
-        <div class="dh-form-section-title mb-2">Sanctioned Fights</div>
-        <div id="fightRecordsList" class="list-group list-group-flush mb-4" style="max-height: 200px; overflow-y: auto;">
-          <div class="list-group-item text-muted">Loading fights…</div>
-        </div>
-
-        <div class="dh-form-section-title mb-3">Log a Match</div>
-        <form id="fightForm">
-          {% csrf_token %}
-          <input type="hidden" name="bird_id" id="fight_bird_id">
-          <input type="hidden" name="record_id" id="fight_record_id">
-          <div class="row g-4 dh-form-grid">
-            <div class="col-md-6">
-              <label class="form-label required">Event / Derby name</label>
-              <input type="text" name="event_name" id="fight_event_name" class="form-control" placeholder="e.g. 4-Cock Derby or Local Hackfight" required>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label required">Fight date</label>
-              <input type="date" name="fight_date" id="fight_date" class="form-control" required>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label required">Match result</label>
-              <select name="result" id="fight_result" class="form-select" required>
-                <option value="win">Win</option>
-                <option value="loss">Loss</option>
-                <option value="draw">Draw / Tinabla</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Fight weight (grams)</label>
-              <input type="number" name="weight_grams" id="fight_weight" class="form-control" min="0">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Opponent / Farm</label>
-              <input type="text" name="opponent" id="fight_opponent" class="form-control" placeholder="e.g. Firebird / Tag 55">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Gaff / Blade spec</label>
-              <input type="text" name="gaff_type" id="fight_gaff" class="form-control" placeholder="e.g. 2.5 inch high-blade slasher">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Duration (seconds)</label>
-              <input type="number" name="duration_seconds" id="fight_duration" class="form-control" min="0" placeholder="e.g. 45">
-            </div>
-            <div class="col-12">
-              <label class="form-label">Fight video URL</label>
-              <input type="url" name="video_url" id="fight_video" class="form-control" placeholder="https://youtube.com/watch?v=...">
-            </div>
-            <div class="col-12">
-              <label class="form-label">Fight analysis &amp; notes</label>
-              <textarea name="notes" id="fight_notes" class="form-control" rows="2" placeholder="e.g. Fast off the cords, delivered early body cut."></textarea>
-            </div>
-          </div>
-          <div class="mt-3 text-end">
-            <button type="submit" class="btn btn-warning" id="fightSubmitBtn">
-              <i class="fas fa-plus-circle me-1"></i>Save Fight Record
-            </button>
-          </div>
-        </form>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Close</button>
@@ -983,8 +858,6 @@
   const SAVE_MEMBER_URL = "{% url 'info:info_save_ajax' %}";
   const SAVE_HEALTH_URL = "{% url 'info:health_record_save_ajax' %}";
   const DELETE_HEALTH_URL = "{% url 'info:health_record_delete_ajax' 0 %}";
-  const FIGHT_LIST_URL = "{% url 'info:fight_records_ajax' 0 %}";
-  const FIGHT_DELETE_URL = "{% url 'info:fight_record_delete_ajax' 0 %}";
   const WEIGHT_LIST_URL = "{% url 'info:weight_logs_ajax' 0 %}";
   const WEIGHT_DELETE_URL = "{% url 'info:weight_log_delete_ajax' 0 %}";
 
@@ -1062,9 +935,6 @@
     if (window.DHBreedQuickAdd) {
       window.DHBreedQuickAdd.setHint(memberBreedHint, MEMBER_BREED_HINT, false);
     }
-    document.getElementById('member_wins').value = '0';
-    document.getElementById('member_losses').value = '0';
-    document.getElementById('member_draws').value = '0';
     document.getElementById('member_comb_type').value = 'Pea';
     document.getElementById('member_leg_color').value = 'Yellow';
     document.getElementById('member_color').value = '';
@@ -1085,9 +955,6 @@
     document.getElementById('member_status').value = button.dataset.status || 'Active';
     document.getElementById('member_birth_date').value = button.dataset.birthDate || '';
     document.getElementById('member_weight').value = button.dataset.weight || '';
-    document.getElementById('member_wins').value = button.dataset.wins || '0';
-    document.getElementById('member_losses').value = button.dataset.losses || '0';
-    document.getElementById('member_draws').value = button.dataset.draws || '0';
     document.getElementById('member_comb_type').value = button.dataset.combType || 'Pea';
     document.getElementById('member_leg_color').value = button.dataset.legColor || 'Yellow';
     document.getElementById('member_color').value = button.dataset.color || '';
@@ -1175,22 +1042,37 @@
     document.getElementById('health_record_type').value = 'Vaccination';
     document.getElementById('health_title').value = '';
     document.getElementById('bird_medicine_picker').value = '';
+    document.getElementById('health_quantity_used').value = '0';
     document.getElementById('health_next_due_date').value = '';
     document.getElementById('health_notes').value = '';
     document.getElementById('health_date_administered').value = localDateString();
     document.getElementById('healthSubmitBtn').textContent = 'Add health record';
     document.getElementById('healthCancelEditBtn').classList.add('d-none');
     document.getElementById('healthFormTitle').textContent = 'Add health record';
+    updateHealthMedicineHint();
     if (window.DHFormTabs) window.DHFormTabs.reset(healthForm);
     clearError(healthErrorBox);
   }
 
   const birdMedicinePicker = document.getElementById('bird_medicine_picker');
+  const healthQuantityUnit = document.getElementById('health_quantity_unit');
+  const healthMedicineHint = document.getElementById('bird_medicine_hint');
+
+  function updateHealthMedicineHint() {
+    const option = birdMedicinePicker.options[birdMedicinePicker.selectedIndex];
+    const hasMedicine = option && option.value;
+    healthQuantityUnit.textContent = (hasMedicine && option.dataset.unit) || 'unit';
+    healthMedicineHint.textContent = hasMedicine
+      ? 'Available stock: ' + (option.dataset.stock || '0') + ' ' + (option.dataset.unit || '') + '. The quantity used is deducted when saved.'
+      : 'Optional. Selecting a cabinet item lets the system deduct stock.';
+  }
+
   if (birdMedicinePicker) {
     birdMedicinePicker.addEventListener('change', function () {
       const option = this.options[this.selectedIndex];
+      updateHealthMedicineHint();
       if (!option || !option.value) return;
-      document.getElementById('health_title').value = option.value;
+      document.getElementById('health_title').value = option.dataset.name || option.value;
       const recordType = option.dataset.recordType;
       if (recordType) document.getElementById('health_record_type').value = recordType;
     });
@@ -1200,10 +1082,12 @@
     document.getElementById('health_record_id').value = record.id;
     document.getElementById('health_record_type').value = record.record_type;
     document.getElementById('health_title').value = record.title;
-    document.getElementById('bird_medicine_picker').value = '';
+    document.getElementById('bird_medicine_picker').value = record.medicine || '';
+    document.getElementById('health_quantity_used').value = record.quantity_used || '0';
     document.getElementById('health_date_administered').value = record.date_administered;
     document.getElementById('health_next_due_date').value = record.next_due_date || '';
     document.getElementById('health_notes').value = record.notes || '';
+    updateHealthMedicineHint();
     document.getElementById('healthSubmitBtn').textContent = 'Save changes';
     document.getElementById('healthCancelEditBtn').classList.remove('d-none');
     document.getElementById('healthFormTitle').textContent = 'Edit health record';
@@ -1243,6 +1127,11 @@
           const notes = record.notes
             ? '<div class="text-muted small mt-1">' + escapeHtml(record.notes) + '</div>'
             : '';
+          const usage = record.medicine_name
+            ? '<div class="text-muted small mt-1"><i class="fas fa-prescription-bottle-medical me-1"></i>' +
+              escapeHtml(record.quantity_used) + ' ' + escapeHtml(record.medicine_unit) +
+              ' of ' + escapeHtml(record.medicine_name) + ' deducted from stock</div>'
+            : '';
           return (
             '<div class="list-group-item">' +
               '<div class="d-flex justify-content-between align-items-start gap-2">' +
@@ -1252,6 +1141,7 @@
                     '<span class="badge bg-blue-lt text-blue">' + escapeHtml(record.record_type) + '</span>' +
                   '</div>' +
                   '<div class="text-muted small">' + escapeHtml(record.date_administered) + due + '</div>' +
+                  usage +
                   notes +
                 '</div>' +
                 '<div class="btn-list flex-nowrap">' +
@@ -1492,104 +1382,6 @@
       .catch(function (error) {
         alert(error.message || 'Could not delete the selected birds.');
       });
-  };
-
-  // --- Fight Records ---
-  const fightModalEl = document.getElementById('fightModal');
-  const fightForm = document.getElementById('fightForm');
-  const fightErrorBox = document.getElementById('fightError');
-  let activeFightBirdId = null;
-
-  function loadFightRecords(birdId) {
-    const list = document.getElementById('fightRecordsList');
-    list.innerHTML = '<div class="list-group-item text-muted">Loading fights…</div>';
-
-    fetch(withId(FIGHT_LIST_URL, birdId), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('fightCareerRecord').textContent = `${data.wins}W – ${data.losses}L – ${data.draws}D`;
-
-        if (!data.data || !data.data.length) {
-          list.innerHTML = '<div class="list-group-item text-muted">No sanctioned fights recorded yet.</div>';
-          return;
-        }
-
-        list.innerHTML = data.data.map(f => {
-          const badgeClass = f.result === 'win' ? 'bg-success text-white' : (f.result === 'loss' ? 'bg-danger text-white' : 'bg-warning text-white');
-          return `
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-              <div>
-                <span class="badge ${badgeClass} me-1">${f.result_display}</span>
-                <strong>${escapeHtml(f.event_name)}</strong>
-                <span class="text-muted small"> &bull; ${f.fight_date} ${f.opponent ? '&bull; vs ' + escapeHtml(f.opponent) : ''}</span>
-                ${f.notes ? `<div class="text-muted small mt-1">${escapeHtml(f.notes)}</div>` : ''}
-              </div>
-              <button type="button" class="btn btn-sm btn-ghost-danger btn-icon" onclick="deleteFight(${f.id})">
-                <i class="fas fa-trash-alt"></i>
-              </button>
-            </div>
-          `;
-        }).join('');
-      })
-      .catch(function (error) {
-        list.innerHTML = '<div class="list-group-item text-danger">' +
-          escapeHtml(error.message || 'Could not load fight records.') + '</div>';
-      });
-  }
-
-  if (fightModalEl) {
-    fightModalEl.addEventListener('show.bs.modal', function (event) {
-      const button = event.relatedTarget;
-      activeFightBirdId = button.dataset.id;
-      document.getElementById('fightBirdTag').textContent = button.dataset.tagNumber || '';
-      document.getElementById('fight_bird_id').value = activeFightBirdId;
-      document.getElementById('fight_date').value = localDateString();
-      fightForm.reset();
-      document.getElementById('fight_bird_id').value = activeFightBirdId;
-      clearError(fightErrorBox);
-      loadFightRecords(activeFightBirdId);
-    });
-
-    fightForm.addEventListener('submit', function (e) {
-      e.preventDefault();
-      clearError(fightErrorBox);
-      const submitBtn = document.getElementById('fightSubmitBtn');
-      submitBtn.disabled = true;
-
-      fetch("{% url 'info:fight_record_save_ajax' %}", {
-        method: 'POST',
-        headers: { 'X-CSRFToken': csrfToken(fightForm) },
-        body: new FormData(fightForm)
-      })
-      .then(async r => {
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Failed to save fight.');
-        return d;
-      })
-      .then(() => {
-        fightForm.reset();
-        document.getElementById('fight_bird_id').value = activeFightBirdId;
-        loadFightRecords(activeFightBirdId);
-      })
-      .catch(err => showError(fightErrorBox, err.message))
-      .finally(() => submitBtn.disabled = false);
-    });
-  }
-
-  window.deleteFight = function (id) {
-    if (!confirm('Delete this fight record?')) return;
-    const formData = new FormData();
-    formData.append('csrfmiddlewaretoken', csrfToken(fightForm));
-    fetch(withId(FIGHT_DELETE_URL, id), { method: 'POST', body: formData })
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) throw new Error(data.error);
-        loadFightRecords(activeFightBirdId);
-        if (typeof window.refreshMainContent === 'function') {
-          setTimeout(window.refreshMainContent, 800);
-        }
-      })
-      .catch(err => showError(fightErrorBox, err.message));
   };
 
   // --- Weight Logs ---

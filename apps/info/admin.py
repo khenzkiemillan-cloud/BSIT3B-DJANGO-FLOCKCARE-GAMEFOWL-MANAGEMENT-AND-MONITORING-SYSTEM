@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
-    Breed, FlockMember, HealthRecord, Medicine, FightRecord, WeightLog,
-    BreedingPen, ClutchRecord, Expense,
+    Breed, FlockMember, HealthRecord, Medicine, WeightLog,
+    BreedingPen, ClutchRecord,
 )
 
 
@@ -13,30 +13,23 @@ class BreedAdmin(admin.ModelAdmin):
 
 @admin.register(FlockMember)
 class FlockMemberAdmin(admin.ModelAdmin):
-    list_display = ('tag_number', 'breed', 'gender', 'status', 'cage_number', 'wins', 'losses', 'draws', 'user')
+    list_display = ('tag_number', 'breed', 'gender', 'status', 'cage_number', 'weight_grams', 'user')
     list_filter = ('status', 'gender', 'breed', 'comb_type', 'leg_color')
     search_fields = ('tag_number', 'sire', 'dam', 'color', 'cage_number')
 
 
 @admin.register(Medicine)
 class MedicineAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'stock_quantity', 'unit', 'unit_cost', 'low_stock_threshold', 'expiration_date', 'user')
-    list_filter = ('category', 'unit')
+    list_display = ('name', 'item_type', 'category', 'stock_quantity', 'unit', 'unit_cost', 'low_stock_threshold', 'expiration_date', 'user')
+    list_filter = ('item_type', 'category', 'unit')
     search_fields = ('name', 'notes')
 
 
 @admin.register(HealthRecord)
 class HealthRecordAdmin(admin.ModelAdmin):
-    list_display = ('bird', 'record_type', 'title', 'date_administered', 'next_due_date')
+    list_display = ('bird', 'record_type', 'title', 'medicine', 'quantity_used', 'date_administered', 'next_due_date')
     list_filter = ('record_type', 'date_administered')
-    search_fields = ('bird__tag_number', 'title', 'notes')
-
-
-@admin.register(FightRecord)
-class FightRecordAdmin(admin.ModelAdmin):
-    list_display = ('bird', 'event_name', 'result', 'fight_date', 'weight_grams', 'opponent')
-    list_filter = ('result', 'fight_date')
-    search_fields = ('bird__tag_number', 'event_name', 'opponent')
+    search_fields = ('bird__tag_number', 'title', 'medicine__name', 'notes')
 
 
 @admin.register(WeightLog)
@@ -57,10 +50,3 @@ class BreedingPenAdmin(admin.ModelAdmin):
 class ClutchRecordAdmin(admin.ModelAdmin):
     list_display = ('pen', 'clutch_number', 'date_started', 'eggs_collected', 'fertile_eggs', 'hatched_count', 'hatch_date')
     list_filter = ('date_started', 'hatch_date')
-
-
-@admin.register(Expense)
-class ExpenseAdmin(admin.ModelAdmin):
-    list_display = ('date', 'bird', 'category', 'amount', 'description', 'user')
-    list_filter = ('category', 'date')
-    search_fields = ('description', 'notes', 'bird__tag_number')

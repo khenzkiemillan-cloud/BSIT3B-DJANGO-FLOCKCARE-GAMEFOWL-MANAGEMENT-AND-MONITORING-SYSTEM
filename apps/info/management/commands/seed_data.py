@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from apps.info.models import (
     Breed, FlockMember, Medicine, HealthRecord,
-    FightRecord, WeightLog, BreedingPen, ClutchRecord, Expense
+    WeightLog, BreedingPen, ClutchRecord
 )
 from apps.users.models import UserProfile
 
@@ -14,7 +14,7 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = 'Seeds realistic gamefowl flock, medicine, health, breeding, expense, and fight records.'
+    help = 'Seeds realistic gamefowl flock, medicine, health, and breeding records.'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -94,9 +94,6 @@ class Command(BaseCommand):
                     'weight_grams': 2150,
                     'sire': 'SW-FND-09',
                     'dam': 'SW-HEN-88',
-                    'wins': 4,
-                    'losses': 0,
-                    'draws': 1,
                 },
                 {
                     'tag_number': 'YLH-202',
@@ -111,9 +108,6 @@ class Command(BaseCommand):
                     'weight_grams': 2200,
                     'sire': 'YLH-001',
                     'dam': 'YLH-HEN-02',
-                    'wins': 3,
-                    'losses': 1,
-                    'draws': 0,
                 },
                 {
                     'tag_number': 'RH-303',
@@ -128,9 +122,6 @@ class Command(BaseCommand):
                     'weight_grams': 2050,
                     'sire': 'RH-BULL',
                     'dam': 'RH-QUEEN',
-                    'wins': 2,
-                    'losses': 0,
-                    'draws': 0,
                 },
                 {
                     'tag_number': 'KL-404',
@@ -145,9 +136,6 @@ class Command(BaseCommand):
                     'weight_grams': 2100,
                     'sire': 'KL-ORIG',
                     'dam': 'KL-MTH',
-                    'wins': 5,
-                    'losses': 1,
-                    'draws': 0,
                 },
                 {
                     'tag_number': 'ALB-505',
@@ -162,9 +150,6 @@ class Command(BaseCommand):
                     'weight_grams': 2250,
                     'sire': 'ALB-SIRE-1',
                     'dam': 'ALB-DAM-1',
-                    'wins': 3,
-                    'losses': 0,
-                    'draws': 0,
                 },
                 {
                     'tag_number': 'GR-606',
@@ -179,9 +164,6 @@ class Command(BaseCommand):
                     'weight_grams': 2080,
                     'sire': 'GR-GREY-01',
                     'dam': 'GR-GREY-02',
-                    'wins': 1,
-                    'losses': 0,
-                    'draws': 0,
                 },
                 {
                     'tag_number': 'SW-HEN-01',
@@ -196,9 +178,6 @@ class Command(BaseCommand):
                     'weight_grams': 1750,
                     'sire': 'SW-FOUNDATION',
                     'dam': 'SW-FOUNDATION-M',
-                    'wins': 0,
-                    'losses': 0,
-                    'draws': 0,
                 },
                 {
                     'tag_number': 'YLH-HEN-02',
@@ -213,9 +192,6 @@ class Command(BaseCommand):
                     'weight_grams': 1800,
                     'sire': 'YLH-SIRE-A',
                     'dam': 'YLH-DAM-A',
-                    'wins': 0,
-                    'losses': 0,
-                    'draws': 0,
                 },
                 {
                     'tag_number': 'KL-HEN-03',
@@ -230,9 +206,6 @@ class Command(BaseCommand):
                     'weight_grams': 1720,
                     'sire': 'KL-CHAMP-01',
                     'dam': 'KL-DAM-B',
-                    'wins': 0,
-                    'losses': 0,
-                    'draws': 0,
                 },
                 {
                     'tag_number': 'SW-PUL-04',
@@ -247,9 +220,6 @@ class Command(BaseCommand):
                     'weight_grams': 1600,
                     'sire': 'SW-101',
                     'dam': 'SW-HEN-01',
-                    'wins': 0,
-                    'losses': 0,
-                    'draws': 0,
                 },
                 {
                     'tag_number': 'RAD-707',
@@ -264,9 +234,6 @@ class Command(BaseCommand):
                     'weight_grams': 2120,
                     'sire': 'RAD-ORIG',
                     'dam': 'RAD-DAM-1',
-                    'wins': 2,
-                    'losses': 1,
-                    'draws': 0,
                 },
                 {
                     'tag_number': 'RET-999',
@@ -281,9 +248,6 @@ class Command(BaseCommand):
                     'weight_grams': 2300,
                     'sire': 'CL-LEGEND',
                     'dam': 'CL-ROYAL',
-                    'wins': 7,
-                    'losses': 2,
-                    'draws': 0,
                 },
             ]
 
@@ -299,112 +263,7 @@ class Command(BaseCommand):
 
             self.stdout.write(self.style.SUCCESS(f"  -> Created/Updated {len(saved_birds)} flock members."))
 
-            # 3. Sanctioned Fight Records
-            sw_101 = saved_birds.get('SW-101')
-            if sw_101:
-                fights_sw = [
-                    {
-                        'event_name': 'Derby Fiesta Invitational (San Juan Arena)',
-                        'fight_date': today - timedelta(days=120),
-                        'weight_grams': 2145,
-                        'opponent': 'Thunder Gamefarm / Stag #44',
-                        'gaff_type': '2.5 inch High-blade Slasher',
-                        'result': 'win',
-                        'duration_seconds': 38,
-                        'video_url': 'https://youtube.com',
-                        'notes': 'Fast off the cords, delivered early body cut in air exchange.',
-                    },
-                    {
-                        'event_name': '4-Cock Derby (Pasay Cockpit Stadium)',
-                        'fight_date': today - timedelta(days=85),
-                        'weight_grams': 2150,
-                        'opponent': 'Black Mamba Aviary',
-                        'gaff_type': '2.5 inch Slasher',
-                        'result': 'win',
-                        'duration_seconds': 52,
-                        'video_url': 'https://youtube.com',
-                        'notes': 'Excellent counter-cutting on the ropes.',
-                    },
-                    {
-                        'event_name': 'National Cocks Championship',
-                        'fight_date': today - timedelta(days=45),
-                        'weight_grams': 2155,
-                        'opponent': 'Golden Wing Farm / Tag-89',
-                        'gaff_type': '2.5 inch Slasher',
-                        'result': 'win',
-                        'duration_seconds': 24,
-                        'video_url': 'https://youtube.com',
-                        'notes': 'Lightning shuffle roundhead cross opponent down in one strike.',
-                    },
-                    {
-                        'event_name': 'Mid-Season 5-Cock Masters',
-                        'fight_date': today - timedelta(days=14),
-                        'weight_grams': 2160,
-                        'opponent': 'Blue Dragon Gamefarm',
-                        'gaff_type': '2.5 inch Slasher',
-                        'result': 'draw',
-                        'duration_seconds': 120,
-                        'video_url': 'https://youtube.com',
-                        'notes': 'Both cocks fought tenaciously to time call (Tinabla).',
-                    },
-                ]
-                for f_cfg in fights_sw:
-                    FightRecord.objects.get_or_create(bird=sw_101, event_name=f_cfg['event_name'], defaults=f_cfg)
-
-            kl_404 = saved_birds.get('KL-404')
-            if kl_404:
-                fights_kl = [
-                    {
-                        'event_name': 'World Slasher Cup Elimination',
-                        'fight_date': today - timedelta(days=140),
-                        'weight_grams': 2100,
-                        'opponent': 'Firebird Outcross',
-                        'gaff_type': '2.5 inch Slasher',
-                        'result': 'win',
-                        'duration_seconds': 41,
-                        'notes': 'Superb lateral movement and timing.',
-                    },
-                    {
-                        'event_name': 'Lipa Mayor\'s Invitational Cup',
-                        'fight_date': today - timedelta(days=95),
-                        'weight_grams': 2095,
-                        'opponent': 'Red Bull Aviary',
-                        'gaff_type': '2.5 inch Slasher',
-                        'result': 'win',
-                        'duration_seconds': 33,
-                        'notes': 'Strong bottom fighting and solid gameness.',
-                    },
-                    {
-                        'event_name': 'Luzon 7-Cock Championship',
-                        'fight_date': today - timedelta(days=40),
-                        'weight_grams': 2120,
-                        'opponent': 'Silver Fox Gamefarm',
-                        'gaff_type': '2.5 inch Slasher',
-                        'result': 'loss',
-                        'duration_seconds': 74,
-                        'notes': 'Injured left wing early, fought game until the end.',
-                    },
-                ]
-                for f_cfg in fights_kl:
-                    FightRecord.objects.get_or_create(bird=kl_404, event_name=f_cfg['event_name'], defaults=f_cfg)
-
-            ylh_202 = saved_birds.get('YLH-202')
-            if ylh_202:
-                FightRecord.objects.get_or_create(
-                    bird=ylh_202,
-                    event_name='Pre-Season 3-Stag Classic',
-                    defaults={
-                        'fight_date': today - timedelta(days=35),
-                        'weight_grams': 2190,
-                        'opponent': 'Delta Gamefarm',
-                        'gaff_type': '2.5 inch Slasher',
-                        'result': 'win',
-                        'duration_seconds': 44,
-                        'notes': 'Power puncher, broke breastplate cleanly.',
-                    }
-                )
-
-            # 4. Daily Weight Logs (Last 7 days)
+            # 3. Daily Weight Logs (Last 7 days)
             cond_birds = [saved_birds.get('YLH-202'), saved_birds.get('RH-303'), saved_birds.get('GR-606')]
             for bird in cond_birds:
                 if not bird:
@@ -428,7 +287,7 @@ class Command(BaseCommand):
                         defaults={'weight_grams': evening_w, 'notes': 'Post workout grain mix 40g'}
                     )
 
-            # 5. Medicine Cabinet Inventory
+            # 4. Medicine Cabinet Inventory
             medicines_data = [
                 {
                     'name': 'Newcastle Disease Vaccine (LaSota Strain)',
@@ -545,7 +404,7 @@ class Command(BaseCommand):
 
             self.stdout.write(self.style.SUCCESS(f"  -> Created/Updated {len(medicines_data)} medicine cabinet items."))
 
-            # 6. Health & Care Schedule Records
+            # 5. Health & Care Schedule Records
             health_records_data = [
                 {
                     'bird': saved_birds.get('YLH-202'),
@@ -607,100 +466,7 @@ class Command(BaseCommand):
 
             self.stdout.write(self.style.SUCCESS(f"  -> Created/Updated {len(health_records_data)} health schedule items."))
 
-            # 7. Flock Expenses
-            expense_data = [
-                {
-                    'bird': saved_birds.get('SW-101'),
-                    'category': 'Feed',
-                    'amount': Decimal('2450.00'),
-                    'date': today - timedelta(days=2),
-                    'description': 'Premium gamefowl feed - 2 sacks',
-                    'notes': 'Starter and conditioning pellets from the local mill.',
-                },
-                {
-                    'bird': saved_birds.get('SW-101'),
-                    'category': 'Entry Fee',
-                    'amount': Decimal('3500.00'),
-                    'date': today - timedelta(days=14),
-                    'description': 'Mid-Season 5-Cock Masters entry fee',
-                },
-                {
-                    'bird': saved_birds.get('YLH-202'),
-                    'category': 'Medicine',
-                    'amount': Decimal('850.00'),
-                    'date': today - timedelta(days=30),
-                    'description': 'Newcastle and fowl pox vaccines',
-                },
-                {
-                    'bird': saved_birds.get('YLH-202'),
-                    'category': 'Feed',
-                    'amount': Decimal('1820.00'),
-                    'date': today - timedelta(days=7),
-                    'description': 'Mixed grains and vitamin supplements',
-                },
-                {
-                    'bird': saved_birds.get('RH-303'),
-                    'category': 'Equipment',
-                    'amount': Decimal('1250.00'),
-                    'date': today - timedelta(days=45),
-                    'description': 'New feeding troughs and waterers',
-                },
-                {
-                    'bird': saved_birds.get('KL-404'),
-                    'category': 'Transport',
-                    'amount': Decimal('900.00'),
-                    'date': today - timedelta(days=40),
-                    'description': 'Van rental to Luzon 7-Cock Championship',
-                },
-                {
-                    'bird': saved_birds.get('GR-606'),
-                    'category': 'Labor',
-                    'amount': Decimal('1500.00'),
-                    'date': today - timedelta(days=5),
-                    'description': 'Handler fee for sparring session',
-                },
-                {
-                    'bird': saved_birds.get('ALB-505'),
-                    'category': 'Utilities',
-                    'amount': Decimal('640.00'),
-                    'date': today - timedelta(days=10),
-                    'description': 'Brooder electricity share',
-                },
-                {
-                    'bird': saved_birds.get('SW-HEN-01'),
-                    'category': 'Feed',
-                    'amount': Decimal('980.00'),
-                    'date': today - timedelta(days=20),
-                    'description': 'Breeder hen layer pellets',
-                },
-                {
-                    'bird': saved_birds.get('RET-999'),
-                    'category': 'Other',
-                    'amount': Decimal('450.00'),
-                    'date': today - timedelta(days=60),
-                    'description': 'Retirement pen bedding and maintenance',
-                },
-            ]
-
-            seeded_expenses = 0
-            for e_cfg in expense_data:
-                if e_cfg['bird']:
-                    _, created = Expense.objects.get_or_create(
-                        user=user,
-                        bird=e_cfg['bird'],
-                        description=e_cfg['description'],
-                        date=e_cfg['date'],
-                        defaults={
-                            'category': e_cfg['category'],
-                            'amount': e_cfg['amount'],
-                            'notes': e_cfg.get('notes', ''),
-                        },
-                    )
-                    seeded_expenses += int(created)
-
-            self.stdout.write(self.style.SUCCESS(f"  -> Ensured {seeded_expenses} new flock expenses."))
-
-            # 8. Breeding Pens & Clutches
+            # 7. Breeding Pens & Clutches
             sw_cock = saved_birds.get('SW-101')
             sw_hen = saved_birds.get('SW-HEN-01')
             if sw_cock and sw_hen:

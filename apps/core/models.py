@@ -13,7 +13,6 @@ class ChickenClassification(models.Model):
     def __str__(self):
         return self.name
 
-
 class Chicken(models.Model):
     class Gender(models.TextChoices):
         MALE = 'male', 'Male'
@@ -148,21 +147,3 @@ class Supply(models.Model):
 
     def __str__(self):
         return self.name
-
-
-class Expense(models.Model):
-    expense_name = models.CharField(max_length=150)
-    amount = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        validators=[MinValueValidator(0)],
-    )
-    expense_date = models.DateField()
-    description = models.TextField(blank=True)
-
-    class Meta:
-        db_table = 'expenses'
-        ordering = ['-expense_date']
-
-    def __str__(self):
-        return f'{self.expense_name} ({self.expense_date})'

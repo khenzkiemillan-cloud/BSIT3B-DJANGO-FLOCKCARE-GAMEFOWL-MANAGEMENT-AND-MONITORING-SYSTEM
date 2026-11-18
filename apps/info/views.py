@@ -17,16 +17,19 @@ from .choices import (
 )
 from .forms import (
     FlockMemberForm, HealthRecordForm, MedicineForm,
-    FightRecordForm, WeightLogForm, BreedingPenForm, ClutchRecordForm,
-    ExpenseForm,
+    WeightLogForm, BreedingPenForm, ClutchRecordForm,
 )
 from .models import (
     Breed, FlockMember, HealthRecord, Medicine,
-    FightRecord, WeightLog, BreedingPen, ClutchRecord, Expense,
+    WeightLog, BreedingPen, ClutchRecord,
 )
 
 HEALTH_DUE_WINDOW_DAYS = 30
 MEDICINE_EXPIRY_WINDOW_DAYS = 30
+
+
+class HealthStockError(Exception):
+    """Raised when a health treatment cannot be deducted from cabinet stock."""
 
 
 def _form_error_message(form):
@@ -62,10 +65,16 @@ def _health_medicine_options(user):
             continue
         seen.add(key)
         options.append({
+            'id': medicine.id,
             'name': name,
-            'category': medicine.get_category_display(),
+            'category': dict(Medicine.CATEGORY_CHOICES).get(
+                medicine.category, medicine.category
+            ),
             'record_type': record_type_for_category(medicine.category),
             'in_cabinet': True,
+            'stock_quantity': medicine.stock_quantity,
+            'unit': medicine.unit,
+            'low_stock_threshold': medicine.low_stock_threshold,
         })
 
     for item in COMMON_MEDICINES:
@@ -74,12 +83,16 @@ def _health_medicine_options(user):
             continue
         seen.add(key)
         options.append({
+            'id': None,
             'name': item['name'],
             'category': dict(Medicine.CATEGORY_CHOICES).get(
                 item['category'], item['category']
             ),
             'record_type': item['record_type'],
             'in_cabinet': False,
+            'stock_quantity': None,
+            'unit': '',
+            'low_stock_threshold': None,
         })
 
     return options
@@ -100,21 +113,55 @@ def _resolve_breed(form, request):
     return breed, None
 
 
-def _recalculate_fight_counters(bird):
-    """Refresh a bird's win/loss/draw totals from its remaining fight records."""
-    bird.wins = bird.fight_records.filter(result='win').count()
-    bird.losses = bird.fight_records.filter(result='loss').count()
-    bird.draws = bird.fight_records.filter(result='draw').count()
-    bird.save(update_fields=['wins', 'losses', 'draws'])
-    return bird
-
-
 def _sync_latest_weight(bird):
     """Set the bird's stored weight to the most recent remaining weight log."""
     latest = bird.weight_logs.order_by('-date', '-created_at').first()
     bird.weight_grams = latest.weight_grams if latest else None
     bird.save(update_fields=['weight_grams'])
     return bird.weight_grams
+
+
+def _format_quantity(quantity):
+    """Render a stored decimal without trailing zeros."""
+    return format(Decimal(quantity).normalize(), 'f')
+
+
+def _adjust_health_medicine_stock(record, previous_medicine_id=None,
+                                  previous_quantity=Decimal('0.00')):
+    """Apply a health record's medicine usage to cabinet stock.
+
+    The previous usage is restored first so that edits can increase, decrease,
+    or change the medicine without losing stock. Call inside ``atomic()``.
+    """
+    if previous_medicine_id and previous_quantity:
+        Medicine.objects.filter(pk=previous_medicine_id).update(
+            stock_quantity=F('stock_quantity') + previous_quantity
+        )
+
+    if not record.medicine_id:
+        return
+
+    quantity = record.quantity_used or Decimal('0.00')
+    if quantity <= 0:
+        return
+
+    medicine = (
+        Medicine.objects.select_for_update()
+        .filter(pk=record.medicine_id)
+        .first()
+    )
+    if medicine is None:
+        raise HealthStockError(
+            'The selected medicine is no longer in your cabinet.'
+        )
+    if medicine.stock_quantity < quantity:
+        raise HealthStockError(
+            f'Not enough {medicine.name} in stock. '
+            f'Available: {_format_quantity(medicine.stock_quantity)} {medicine.unit}.'
+        )
+
+    medicine.stock_quantity -= quantity
+    medicine.save(update_fields=['stock_quantity'])
 
 
 @login_required(login_url='login')
@@ -220,9 +267,6 @@ def info_list_ajax(request):
         'gender': bird.gender,
         'status': bird.status,
         'weight_grams': bird.weight_grams,
-        'wins': bird.wins,
-        'losses': bird.losses,
-        'draws': bird.draws,
         'cage_number': bird.cage_number,
         'image_url': bird.image.url if bird.image else '',
     } for bird in page.object_list]
@@ -255,9 +299,6 @@ def info_get_ajax(request, pk):
         'color': bird.color or '',
         'cage_number': bird.cage_number or '',
         'weight_grams': bird.weight_grams,
-        'wins': bird.wins,
-        'losses': bird.losses,
-        'draws': bird.draws,
         'image_url': bird.image.url if bird.image else '',
     })
 
@@ -338,103 +379,6 @@ def breed_create_ajax(request):
             f'Breed "{breed.name}" added and selected.'
             if created else f'Breed "{breed.name}" already exists and was selected.'
         ),
-    })
-
-
-# --- FIGHT & PERFORMANCE RECORDS ---
-
-@login_required(login_url='login')
-@_json_not_found
-def fight_records_ajax(request, pk):
-    """Retrieve all fight/match records for a bird."""
-    bird = scoped_flock_member(request.user, pk)
-    fights = bird.fight_records.order_by('-fight_date', '-created_at')
-    data = [{
-        'id': f.id,
-        'event_name': f.event_name,
-        'fight_date': str(f.fight_date),
-        'weight_grams': f.weight_grams or '',
-        'opponent': f.opponent or '',
-        'gaff_type': f.gaff_type or '',
-        'result': f.result,
-        'result_display': f.get_result_display(),
-        'duration_seconds': f.duration_seconds or '',
-        'video_url': f.video_url or '',
-        'notes': f.notes or '',
-    } for f in fights]
-    return JsonResponse({
-        'bird_tag': bird.tag_number,
-        'wins': bird.wins,
-        'losses': bird.losses,
-        'draws': bird.draws,
-        'data': data
-    })
-
-
-@login_required(login_url='login')
-@require_POST
-@_json_not_found
-def fight_record_save_ajax(request):
-    """Create or update a fight/match record and sync counters."""
-    record_id = (request.POST.get('record_id') or '').strip()
-    bird_id = (request.POST.get('bird_id') or '').strip()
-    if not bird_id:
-        return JsonResponse({'error': 'Please select a bird.'}, status=400)
-    bird = scoped_flock_member(request.user, bird_id)
-
-    if record_id:
-        if not record_id.isdigit():
-            raise Http404('Fight record not found.')
-        record = FightRecord.objects.filter(pk=record_id, bird__user=request.user).first()
-        if record is None:
-            raise Http404('Fight record not found.')
-    else:
-        record = None
-
-    form = FightRecordForm(request.POST, instance=record)
-    if not form.is_valid():
-        return JsonResponse(
-            {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
-            status=400,
-        )
-
-    previous_bird = record.bird if record is not None else None
-    record = form.save(commit=False)
-    record.bird = bird
-    record.save()
-
-    # Recalculate the new bird's counters, and the old bird's when a record was
-    # reassigned so neither bird keeps stale win/loss/draw totals.
-    _recalculate_fight_counters(bird)
-    if previous_bird is not None and previous_bird.pk != bird.pk:
-        _recalculate_fight_counters(previous_bird)
-
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Fight record saved successfully.',
-        'id': record.pk,
-        'wins': bird.wins,
-        'losses': bird.losses,
-        'draws': bird.draws,
-    })
-
-
-@login_required(login_url='login')
-@require_POST
-@_json_not_found
-def fight_record_delete_ajax(request, pk):
-    """Delete a fight record and update bird counters."""
-    record = FightRecord.objects.filter(pk=pk, bird__user=request.user).first()
-    if record is None:
-        raise Http404('Fight record not found.')
-    bird = record.bird
-    record.delete()
-
-    _recalculate_fight_counters(bird)
-
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Fight record deleted successfully.',
     })
 
 
@@ -596,11 +540,15 @@ def clutch_save_ajax(request):
 def health_records_ajax(request, pk):
     """Retrieve all health records for a specific bird."""
     bird = scoped_flock_member(request.user, pk)
-    records = bird.health_records.order_by('-date_administered')
+    records = bird.health_records.select_related('medicine').order_by('-date_administered')
     data = [{
         'id': record.id,
         'record_type': record.record_type,
         'title': record.title,
+        'medicine': record.medicine_id,
+        'medicine_name': record.medicine.name if record.medicine else '',
+        'medicine_unit': record.medicine.unit if record.medicine else '',
+        'quantity_used': _format_quantity(record.quantity_used) if record.quantity_used else '',
         'date_administered': str(record.date_administered),
         'next_due_date': str(record.next_due_date) if record.next_due_date else '',
         'notes': record.notes or '',
@@ -612,7 +560,7 @@ def health_records_ajax(request, pk):
 @require_POST
 @_json_not_found
 def health_record_save_ajax(request):
-    """Create or update a health or vaccination log."""
+    """Create or update a health log and adjust medicine stock."""
     record_id = (request.POST.get('record_id') or '').strip()
     bird_id = (request.POST.get('bird_id') or '').strip()
     if not bird_id:
@@ -628,7 +576,10 @@ def health_record_save_ajax(request):
     else:
         record = None
 
-    form = HealthRecordForm(request.POST, instance=record)
+    previous_medicine_id = record.medicine_id if record else None
+    previous_quantity = (record.quantity_used or Decimal('0.00')) if record else Decimal('0.00')
+
+    form = HealthRecordForm(request.POST, instance=record, user=request.user)
     if not form.is_valid():
         return JsonResponse(
             {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
@@ -637,14 +588,31 @@ def health_record_save_ajax(request):
 
     record = form.save(commit=False)
     record.bird = bird
-    record.save()
+
+    try:
+        with transaction.atomic():
+            record.save()
+            _adjust_health_medicine_stock(
+                record,
+                previous_medicine_id=previous_medicine_id,
+                previous_quantity=previous_quantity,
+            )
+    except HealthStockError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+    message = (
+        'Health record updated successfully.' if record_id
+        else 'Health record added successfully.'
+    )
+    if record.medicine_id and record.quantity_used:
+        message += (
+            f' Deducted {_format_quantity(record.quantity_used)} '
+            f'{record.medicine.unit} of {record.medicine.name} from stock.'
+        )
 
     return JsonResponse({
         'status': 'success',
-        'message': (
-            'Health record updated successfully.' if record_id
-            else 'Health record added successfully.'
-        ),
+        'message': message,
         'id': record.pk,
     })
 
@@ -653,16 +621,31 @@ def health_record_save_ajax(request):
 @require_POST
 @_json_not_found
 def health_record_delete_ajax(request, pk):
-    """Delete a health record that belongs to one of the user's birds."""
+    """Delete a health record and restore any medicine stock it used."""
     record = HealthRecord.objects.filter(pk=pk, bird__user=request.user).first()
     if record is None:
         raise Http404('Health record not found.')
 
     title = record.title
-    record.delete()
+    medicine_id = record.medicine_id
+    quantity_used = record.quantity_used or Decimal('0.00')
+
+    with transaction.atomic():
+        record.delete()
+        if medicine_id and quantity_used > 0:
+            # The cabinet item may already be gone (FK is SET_NULL), in which
+            # case there is no stock left to restore.
+            Medicine.objects.filter(pk=medicine_id).update(
+                stock_quantity=F('stock_quantity') + quantity_used
+            )
+
+    message = f'Health record "{title}" deleted successfully.'
+    if medicine_id and quantity_used > 0:
+        message += ' Medicine stock was returned to the cabinet.'
+
     return JsonResponse({
         'status': 'success',
-        'message': f'Health record "{title}" deleted successfully.',
+        'message': message,
     })
 
 
@@ -677,7 +660,7 @@ def health_list_page(request):
     state = request.GET.get('state', '').strip()
     record_type = request.GET.get('record_type', '').strip()
 
-    records = HealthRecord.objects.filter(bird__user=request.user).select_related('bird')
+    records = HealthRecord.objects.filter(bird__user=request.user).select_related('bird', 'medicine')
     counts = records.aggregate(
         total=Count('id'),
         overdue=Count('id', filter=Q(next_due_date__lt=today)),
@@ -803,6 +786,7 @@ def medicine_list_page(request):
 
     return render(request, 'info/medicine_list.html', {
         'medicines': page,
+        'birds': scoped_flock_members(request.user).order_by('tag_number'),
         'categories': Medicine.CATEGORY_CHOICES,
         'medicine_suggestions': COMMON_MEDICINES,
         'unit_suggestions': MEDICINE_UNITS,
@@ -906,64 +890,15 @@ def medicine_restock_ajax(request):
     if new_stock > Decimal('99999999.99'):
         return JsonResponse({'error': 'That restock would exceed the maximum stock quantity.'}, status=400)
 
-    record_expense = (request.POST.get('record_expense') or '').lower() in ('1', 'true', 'on', 'yes')
-    total_cost_raw = (request.POST.get('total_cost') or '').strip()
-    total_cost = Decimal('0.00')
-
-    if record_expense:
-        if total_cost_raw:
-            try:
-                total_cost = Decimal(total_cost_raw)
-            except (InvalidOperation, TypeError, ValueError):
-                return JsonResponse({'error': 'Enter a valid total cost.'}, status=400)
-
-            if not total_cost.is_finite():
-                return JsonResponse({'error': 'Enter a valid total cost.'}, status=400)
-
-            try:
-                total_cost = total_cost.quantize(Decimal('0.01'))
-            except InvalidOperation:
-                return JsonResponse({'error': 'Enter a valid total cost.'}, status=400)
-        else:
-            # Fall back to the medicine's per-unit cost when no receipt total
-            # was supplied.
-            total_cost = ((medicine.unit_cost or Decimal('0.00')) * amount).quantize(Decimal('0.01'))
-
-        if total_cost <= 0:
-            return JsonResponse(
-                {'error': 'Enter the total cost paid for this restock.'},
-                status=400,
-            )
-        if total_cost > Decimal('9999999999.99'):
-            return JsonResponse({'error': 'That expense amount is too large.'}, status=400)
-
     with transaction.atomic():
         medicine.stock_quantity = new_stock
         medicine.save(update_fields=['stock_quantity'])
 
-        if record_expense:
-            Expense.objects.create(
-                user=request.user,
-                bird=None,
-                category='Medicine',
-                amount=total_cost,
-                date=timezone.localdate(),
-                description=(
-                    f'Medicine restock: {medicine.name} '
-                    f'({format(amount.normalize(), "f")} {medicine.unit})'
-                )[:200],
-                notes='Auto-logged from a medicine restock.',
-            )
-
     message = f'Added {format(amount.normalize(), "f")} {medicine.unit} to {medicine.name}.'
-    if record_expense:
-        message += f' Logged PHP {format(total_cost, ".2f")} as a Medicine expense.'
-
     return JsonResponse({
         'status': 'success',
         'message': message,
         'stock_quantity': format(medicine.stock_quantity.normalize(), 'f'),
-        'expense_logged': record_expense,
     })
 
 
@@ -1008,9 +943,6 @@ def pedigree_ajax(request, pk):
             'gender': bird.gender,
             'color': bird.color or '',
             'birth_date': str(bird.birth_date) if bird.birth_date else '',
-            'wins': bird.wins,
-            'losses': bird.losses,
-            'draws': bird.draws,
         },
         'sire': sire_node,
         'dam': dam_node,
@@ -1040,8 +972,6 @@ def pedigree_certificate_page(request, pk):
     gp_mat_sire = _build_lineage_node(request.user, dam_node.get('sire'))
     gp_mat_dam = _build_lineage_node(request.user, dam_node.get('dam'))
 
-    fights = bird.fight_records.order_by('-fight_date')[:5]
-
     return render(request, 'info/pedigree_certificate.html', {
         'bird': bird,
         'profile': profile,
@@ -1051,7 +981,6 @@ def pedigree_certificate_page(request, pk):
         'gp_pat_dam': gp_pat_dam,
         'gp_mat_sire': gp_mat_sire,
         'gp_mat_dam': gp_mat_dam,
-        'fights': fights,
         'today': timezone.localdate(),
     })
 
@@ -1079,18 +1008,53 @@ def flock_batch_action_ajax(request):
         return JsonResponse({'status': 'success', 'message': f'Updated {count} birds to "{new_status}".'})
 
     elif action == 'batch_health':
-        form = HealthRecordForm(request.POST)
+        form = HealthRecordForm(request.POST, user=request.user)
         if not form.is_valid():
             return JsonResponse({'error': _form_error_message(form)}, status=400)
 
         cleaned_data = form.cleaned_data
-        records_to_create = [
-            HealthRecord(bird=b, **cleaned_data) for b in birds
-        ]
-        HealthRecord.objects.bulk_create(records_to_create)
+        medicine = cleaned_data.get('medicine')
+        quantity_used = cleaned_data.get('quantity_used') or Decimal('0.00')
+        total_needed = quantity_used * count
+
+        try:
+            with transaction.atomic():
+                if medicine is not None and total_needed > 0:
+                    cabinet_item = (
+                        Medicine.objects.select_for_update()
+                        .filter(pk=medicine.pk, user=request.user)
+                        .first()
+                    )
+                    if cabinet_item is None:
+                        raise HealthStockError(
+                            'The selected medicine is no longer in your cabinet.'
+                        )
+                    if cabinet_item.stock_quantity < total_needed:
+                        raise HealthStockError(
+                            f'Not enough {cabinet_item.name} in stock for {count} birds. '
+                            f'Needed: {_format_quantity(total_needed)} {cabinet_item.unit}, '
+                            f'available: {_format_quantity(cabinet_item.stock_quantity)} '
+                            f'{cabinet_item.unit}.'
+                        )
+                    cabinet_item.stock_quantity -= total_needed
+                    cabinet_item.save(update_fields=['stock_quantity'])
+
+                records_to_create = [
+                    HealthRecord(bird=b, **cleaned_data) for b in birds
+                ]
+                HealthRecord.objects.bulk_create(records_to_create)
+        except HealthStockError as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+
+        message = f'Logged "{cleaned_data["title"]}" for {count} birds.'
+        if medicine is not None and total_needed > 0:
+            message += (
+                f' Deducted {_format_quantity(total_needed)} {medicine.unit} '
+                f'of {medicine.name} from stock.'
+            )
         return JsonResponse({
             'status': 'success',
-            'message': f'Logged "{cleaned_data["title"]}" for {count} birds.',
+            'message': message,
         })
 
     elif action == 'delete':
@@ -1098,130 +1062,3 @@ def flock_batch_action_ajax(request):
         return JsonResponse({'status': 'success', 'message': f'Deleted {count} birds.'})
 
     return JsonResponse({'error': 'Unknown action.'}, status=400)
-
-
-# --- EXPENSES ---
-
-@login_required(login_url='login')
-def expense_list_page(request):
-    """Render the expense tracker with per-flock-member totals."""
-    today = timezone.localdate()
-    month_start = today.replace(day=1)
-    query = request.GET.get('q', '').strip()
-    bird_id = request.GET.get('bird', '').strip()
-    category = request.GET.get('category', '').strip()
-    period = request.GET.get('period', '').strip()
-
-    expenses = Expense.objects.filter(user=request.user)
-    counts = expenses.aggregate(
-        total=Count('id'),
-        flock_count=Count('bird', distinct=True),
-        month_count=Count('id', filter=Q(date__gte=month_start)),
-        year_count=Count('id', filter=Q(date__year=today.year)),
-    )
-    totals = expenses.aggregate(
-        total_expenses=Sum('amount'),
-        month_expenses=Sum('amount', filter=Q(date__gte=month_start)),
-    )
-    total_expenses = totals['total_expenses'] or Decimal('0.00')
-    month_expenses = totals['month_expenses'] or Decimal('0.00')
-
-    # All-time totals per flock member for the summary card.
-    flock_summary = (
-        expenses
-        .values('bird_id', 'bird__tag_number', 'bird__breed__name')
-        .annotate(total=Sum('amount'), entry_count=Count('id'))
-        .order_by('-total', 'bird__tag_number')
-    )
-
-    if query:
-        expenses = expenses.filter(
-            Q(description__icontains=query) |
-            Q(category__icontains=query) |
-            Q(notes__icontains=query) |
-            Q(bird__tag_number__icontains=query)
-        )
-
-    if bird_id.isdigit() and scoped_flock_members(request.user).filter(pk=bird_id).exists():
-        expenses = expenses.filter(bird_id=bird_id)
-    else:
-        bird_id = ''
-
-    valid_categories = {value for value, _ in Expense.CATEGORY_CHOICES}
-    if category not in valid_categories:
-        category = ''
-    if category:
-        expenses = expenses.filter(category=category)
-
-    if period == 'month':
-        expenses = expenses.filter(date__gte=month_start)
-    elif period == 'year':
-        expenses = expenses.filter(date__year=today.year)
-    else:
-        period = ''
-
-    expenses = expenses.select_related('bird', 'bird__breed').order_by('-date', '-created_at')
-    paginator = Paginator(expenses, 15)
-    page = paginator.get_page(request.GET.get('page', 1))
-
-    return render(request, 'info/expense_list.html', {
-        'expenses': page,
-        'query': query,
-        'bird_id': bird_id,
-        'category': category,
-        'period': period,
-        'categories': Expense.CATEGORY_CHOICES,
-        'birds': scoped_flock_members(request.user).select_related('breed').order_by('tag_number'),
-        'flock_summary': flock_summary,
-        'counts': counts,
-        'total_expenses': total_expenses,
-        'month_expenses': month_expenses,
-        'today': today,
-    })
-
-
-@login_required(login_url='login')
-@require_POST
-@_json_not_found
-def expense_save_ajax(request):
-    """Create or update an expense tied to one of the user's flock members."""
-    expense_id = (request.POST.get('id') or '').strip()
-
-    if expense_id:
-        if not expense_id.isdigit():
-            raise Http404('Expense not found.')
-        expense = Expense.objects.filter(pk=expense_id, user=request.user).first()
-        if expense is None:
-            raise Http404('Expense not found.')
-    else:
-        expense = Expense(user=request.user)
-
-    form = ExpenseForm(request.POST, instance=expense, user=request.user)
-    if not form.is_valid():
-        return JsonResponse(
-            {'error': _form_error_message(form), 'errors': form.errors.get_json_data()},
-            status=400,
-        )
-
-    expense = form.save(commit=False)
-    expense.user = request.user
-    expense.save()
-
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Expense updated successfully.' if expense_id else 'Expense added successfully.',
-        'id': expense.pk,
-    })
-
-
-@login_required(login_url='login')
-@require_POST
-@_json_not_found
-def expense_delete_ajax(request, pk):
-    """Delete one of the user's expense records."""
-    expense = Expense.objects.filter(pk=pk, user=request.user).first()
-    if expense is None:
-        raise Http404('Expense not found.')
-
-    expense.delete()
-    return JsonResponse({'status': 'success', 'message': 'Expense deleted successfully.'})

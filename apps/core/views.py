@@ -6,14 +6,14 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, DecimalField, F, Q, Sum
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from apps.core.scoping import scoped_flock_members
-from apps.info.models import Expense, HealthRecord, Medicine
+from apps.info.models import HealthRecord, Medicine
 
 User = get_user_model()
 MAX_FAILED_ATTEMPTS = 5
@@ -175,17 +175,10 @@ def home(request):
         total_birds=Count('id'),
         active_birds=Count('id', filter=Q(status='Active')),
         retired_birds=Count('id', filter=Q(status='Retired')),
-        total_wins=Sum('wins'),
-        total_losses=Sum('losses'),
-        total_draws=Sum('draws'),
     )
     total_birds = stats['total_birds'] or 0
     active_birds = stats['active_birds'] or 0
     retired_birds = stats['retired_birds'] or 0
-    total_wins = stats['total_wins'] or 0
-    total_losses = stats['total_losses'] or 0
-    total_draws = stats['total_draws'] or 0
-    total_fights = total_wins + total_losses + total_draws
 
     def _pct(value):
         return round(value / total_birds * 100) if total_birds else 0
@@ -210,27 +203,29 @@ def home(request):
     overdue_records = overdue_qs.select_related('bird').order_by('next_due_date')[:5]
 
     medicine_expiry_cutoff = today + timedelta(days=30)
-    medicine_alert_count = Medicine.objects.filter(user=request.user).filter(
+    inventory_items = Medicine.objects.filter(user=request.user)
+    inventory_stats = inventory_items.aggregate(
+        total_items=Count('id'),
+        medicine_items=Count('id', filter=Q(item_type='medicine')),
+        feed_items=Count('id', filter=Q(item_type='feed')),
+        equipment_items=Count('id', filter=Q(item_type='equipment')),
+        supply_items=Count('id', filter=Q(item_type='supply')),
+        total_val=Sum(
+            F('stock_quantity') * F('unit_cost'),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        ),
+        low_stock_count=Count('id', filter=Q(
+            stock_quantity__gt=0,
+            stock_quantity__lte=F('low_stock_threshold'),
+        )),
+    )
+    inventory_alert_count = inventory_items.filter(
         Q(stock_quantity__lte=F('low_stock_threshold')) |
         Q(expiration_date__lt=today) |
         Q(expiration_date__gte=today, expiration_date__lte=medicine_expiry_cutoff)
     ).count()
 
-    month_start = today.replace(day=1)
-    expense_totals = Expense.objects.filter(user=request.user).aggregate(
-        total=Sum('amount'),
-        month_total=Sum('amount', filter=Q(date__gte=month_start)),
-        entries=Count('id'),
-        flock_count=Count('bird', distinct=True),
-    )
-    expense_total = expense_totals['total'] or 0
-    expense_month = expense_totals['month_total'] or 0
-
     context = {
-        'expense_total': expense_total,
-        'expense_month': expense_month,
-        'expense_count': expense_totals['entries'] or 0,
-        'expense_flock_count': expense_totals['flock_count'] or 0,
         'total_birds': total_birds,
         'active_birds': active_birds,
         'retired_birds': retired_birds,
@@ -239,16 +234,20 @@ def home(request):
         'other_birds': other_birds,
         'other_pct': max(100 - active_pct - retired_pct, 0),
         'breed_count': members.exclude(breed__isnull=True).values('breed').distinct().count(),
-        'total_wins': total_wins,
-        'total_losses': total_losses,
-        'total_draws': total_draws,
-        'total_fights': total_fights,
         'recent_members': members.select_related('breed').order_by('-created_at')[:5],
         'upcoming_records': upcoming_records,
         'upcoming_count': upcoming_qs.count(),
         'overdue_records': overdue_records,
         'overdue_count': overdue_qs.count(),
-        'medicine_alert_count': medicine_alert_count,
+        'medicine_alert_count': inventory_alert_count,
+        'inventory_alert_count': inventory_alert_count,
+        'inventory_total_items': inventory_stats['total_items'] or 0,
+        'inventory_medicine_count': inventory_stats['medicine_items'] or 0,
+        'inventory_feed_count': inventory_stats['feed_items'] or 0,
+        'inventory_equipment_count': inventory_stats['equipment_items'] or 0,
+        'inventory_supply_count': inventory_stats['supply_items'] or 0,
+        'inventory_total_value': inventory_stats['total_val'] or 0,
+        'inventory_low_stock': inventory_stats['low_stock_count'] or 0,
         'today': today,
     }
     return render(request, 'home.html', context)

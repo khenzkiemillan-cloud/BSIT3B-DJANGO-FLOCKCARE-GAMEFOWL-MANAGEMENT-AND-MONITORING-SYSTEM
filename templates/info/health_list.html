@@ -57,8 +57,13 @@
           Choose the bird, record type and medicine from the lists, then set the schedule.
         </div>
       </div>
-      <span class="badge bg-success-lt text-success ms-auto">Health</span>
+      <button type="button" class="btn btn-success ms-auto"
+              data-bs-toggle="collapse" data-bs-target="#quickHealthFormCollapse"
+              aria-expanded="false" aria-controls="quickHealthFormCollapse">
+        <i class="fas fa-plus-circle me-2" aria-hidden="true"></i>Add health record
+      </button>
     </div>
+    <div class="collapse" id="quickHealthFormCollapse">
     <form id="quickHealthForm" novalidate>
       {% csrf_token %}
       <div class="card-body">
@@ -93,23 +98,21 @@
           </div>
           <div class="col-sm-6 col-lg-3">
             <label class="form-label" for="quick_health_medicine">Medicine / treatment used</label>
-            <select id="quick_health_medicine" class="form-select">
-              <option value="">Select a medicine</option>
+            <select name="medicine" id="quick_health_medicine" class="form-select">
+              <option value="">No cabinet medicine</option>
               <optgroup label="My medicine cabinet">
                 {% for med in medicine_options %}
                   {% if med.in_cabinet %}
-                    <option value="{{ med.name }}" data-record-type="{{ med.record_type }}">{{ med.name }} — {{ med.category }}</option>
-                  {% endif %}
-                {% endfor %}
-              </optgroup>
-              <optgroup label="Common vaccines &amp; treatments">
-                {% for med in medicine_options %}
-                  {% if not med.in_cabinet %}
-                    <option value="{{ med.name }}" data-record-type="{{ med.record_type }}">{{ med.name }} — {{ med.category }}</option>
+                    <option value="{{ med.id }}" data-name="{{ med.name }}" data-record-type="{{ med.record_type }}" data-stock="{{ med.stock_quantity }}" data-unit="{{ med.unit }}">{{ med.name }} — {{ med.stock_quantity }} {{ med.unit }} in stock</option>
                   {% endif %}
                 {% endfor %}
               </optgroup>
             </select>
+            <small class="form-hint" id="quick_health_medicine_hint">Select a cabinet item to deduct stock.</small>
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="quick_health_quantity">Quantity used (<span id="quick_health_quantity_unit">unit</span>)</label>
+            <input type="number" name="quantity_used" id="quick_health_quantity" class="form-control" min="0" step="0.01" value="0">
           </div>
           <div class="col-sm-6 col-lg-3">
             <label class="form-label required" for="quick_health_title">Title</label>
@@ -145,6 +148,7 @@
         </button>
       </div>
     </form>
+    </div>
   </div>
 
   <div class="dh-toolbar">
@@ -239,6 +243,12 @@
             </td>
             <td data-label="Record">
               <div class="fw-medium">{{ record.title }}</div>
+              {% if record.medicine %}
+              <div class="text-muted small">
+                <i class="fas fa-prescription-bottle-medical me-1"></i>
+                {{ record.quantity_used|floatformat:"-2" }} {{ record.medicine.unit }} of {{ record.medicine.name }}
+              </div>
+              {% endif %}
               {% if record.notes %}
               <div class="text-muted small text-truncate" style="max-width: 20rem;">{{ record.notes }}</div>
               {% endif %}
@@ -274,6 +284,8 @@
                         data-tag-number="{{ record.bird.tag_number }}"
                         data-record-type="{{ record.record_type }}"
                         data-title="{{ record.title }}"
+                        data-medicine="{{ record.medicine_id|default:'' }}"
+                        data-quantity-used="{{ record.quantity_used|floatformat:'-2' }}"
                         data-date-administered="{{ record.date_administered|date:'Y-m-d' }}"
                         data-next-due-date="{{ record.next_due_date|date:'Y-m-d' }}"
                         data-notes="{{ record.notes|default:'' }}"
@@ -412,24 +424,22 @@
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Medicine / treatment used</label>
-                  <select id="health_medicine_picker" class="form-select">
-                    <option value="">Select a medicine</option>
+                  <select name="medicine" id="health_medicine_picker" class="form-select">
+                    <option value="">No cabinet medicine</option>
                     <optgroup label="My medicine cabinet">
                       {% for med in medicine_options %}
                       {% if med.in_cabinet %}
-                      <option value="{{ med.name }}" data-record-type="{{ med.record_type }}">{{ med.name }} — {{ med.category }}</option>
-                      {% endif %}
-                      {% endfor %}
-                    </optgroup>
-                    <optgroup label="Common vaccines &amp; treatments">
-                      {% for med in medicine_options %}
-                      {% if not med.in_cabinet %}
-                      <option value="{{ med.name }}" data-record-type="{{ med.record_type }}">{{ med.name }} — {{ med.category }}</option>
+                      <option value="{{ med.id }}" data-name="{{ med.name }}" data-record-type="{{ med.record_type }}" data-stock="{{ med.stock_quantity }}" data-unit="{{ med.unit }}">{{ med.name }} — {{ med.stock_quantity }} {{ med.unit }} in stock</option>
                       {% endif %}
                       {% endfor %}
                     </optgroup>
                   </select>
-                  <small class="form-hint">Optional. Selecting fills the title and record type below.</small>
+                  <small class="form-hint" id="health_medicine_hint">Optional. Selecting a cabinet item lets the system deduct stock.</small>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Quantity used (<span id="health_quantity_unit">unit</span>)</label>
+                  <input type="number" name="quantity_used" id="health_quantity_used" class="form-control" min="0" step="0.01" value="0">
+                  <small class="form-hint">Deducts from the selected cabinet medicine stock.</small>
                 </div>
                 <div class="col-md-6">
                   <label class="form-label required">Title</label>
@@ -531,23 +541,38 @@
     }
   }
 
+  const medicinePicker = document.getElementById('health_medicine_picker');
+  const quantityUnit = document.getElementById('health_quantity_unit');
+  const medicineHint = document.getElementById('health_medicine_hint');
+
+  function updateMedicineHint() {
+    const option = medicinePicker.options[medicinePicker.selectedIndex];
+    const hasMedicine = option && option.value;
+    quantityUnit.textContent = (hasMedicine && option.dataset.unit) || 'unit';
+    medicineHint.textContent = hasMedicine
+      ? 'Available stock: ' + (option.dataset.stock || '0') + ' ' + (option.dataset.unit || '') + '. The quantity used is deducted when saved.'
+      : 'Optional. Selecting a cabinet item lets the system deduct stock.';
+  }
+
   function resetForm() {
     form.reset();
     if (window.DHFormTabs) window.DHFormTabs.reset(form);
     document.getElementById('health_record_id').value = '';
     document.getElementById('health_medicine_picker').value = '';
+    document.getElementById('health_quantity_used').value = '0';
     document.getElementById('health_date_administered').value =
       new Date().toISOString().slice(0, 10);
     document.getElementById('healthRecordModalTitle').textContent = 'Add health record';
     document.getElementById('healthSubmitBtn').textContent = 'Save health record';
+    updateMedicineHint();
     clearError();
   }
 
-  const medicinePicker = document.getElementById('health_medicine_picker');
   medicinePicker.addEventListener('change', function () {
     const option = this.options[this.selectedIndex];
+    updateMedicineHint();
     if (!option || !option.value) return;
-    document.getElementById('health_title').value = option.value;
+    document.getElementById('health_title').value = option.dataset.name || option.value;
     const recordType = option.dataset.recordType;
     if (recordType) document.getElementById('health_record_type').value = recordType;
   });
@@ -563,9 +588,12 @@
     document.getElementById('health_bird_id').value = button.dataset.birdId || '';
     document.getElementById('health_record_type').value = button.dataset.recordType || 'Vaccination';
     document.getElementById('health_title').value = button.dataset.title || '';
+    document.getElementById('health_medicine_picker').value = button.dataset.medicine || '';
+    document.getElementById('health_quantity_used').value = button.dataset.quantityUsed || '0';
     document.getElementById('health_date_administered').value = button.dataset.dateAdministered || '';
     document.getElementById('health_next_due_date').value = button.dataset.nextDueDate || '';
     document.getElementById('health_notes').value = button.dataset.notes || '';
+    updateMedicineHint();
     if (window.DHFormTabs) window.DHFormTabs.activate(form, 'healthTabDetails');
   });
 
@@ -643,7 +671,18 @@
   const medicinePicker = document.getElementById('quick_health_medicine');
   const titleInput = document.getElementById('quick_health_title');
   const typeSelect = document.getElementById('quick_health_type');
+  const quantityUnit = document.getElementById('quick_health_quantity_unit');
+  const medicineHint = document.getElementById('quick_health_medicine_hint');
   const submitBtn = document.getElementById('quickHealthSubmit');
+
+  function updateMedicineHint() {
+    const option = medicinePicker.options[medicinePicker.selectedIndex];
+    const hasMedicine = option && option.value;
+    quantityUnit.textContent = (hasMedicine && option.dataset.unit) || 'unit';
+    medicineHint.textContent = hasMedicine
+      ? 'Available stock: ' + (option.dataset.stock || '0') + ' ' + (option.dataset.unit || '') + '. The quantity used is deducted when saved.'
+      : 'Select a cabinet item to deduct stock.';
+  }
 
   function showError(message) {
     errorBox.textContent = message;
@@ -657,8 +696,9 @@
 
   medicinePicker.addEventListener('change', function () {
     const option = this.options[this.selectedIndex];
+    updateMedicineHint();
     if (!option || !option.value) return;
-    titleInput.value = option.value;
+    titleInput.value = option.dataset.name || option.value;
     if (option.dataset.recordType) {
       typeSelect.value = option.dataset.recordType;
     }

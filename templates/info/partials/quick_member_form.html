@@ -9,8 +9,13 @@
         Enter the basic flock details below.
       </div>
     </div>
-    <span class="badge bg-primary-lt text-primary ms-auto">Quick add</span>
+    <button type="button" class="btn btn-primary ms-auto"
+            data-bs-toggle="collapse" data-bs-target="#quickMemberFormCollapse"
+            aria-expanded="false" aria-controls="quickMemberFormCollapse">
+      <i class="fas fa-plus-circle me-2" aria-hidden="true"></i>Add flock member
+    </button>
   </div>
+  <div class="collapse" id="quickMemberFormCollapse">
   <form id="quickMemberForm" novalidate>
     {% csrf_token %}
     <div class="card-body">
@@ -108,6 +113,7 @@
       </button>
     </div>
   </form>
+  </div>
 </div>
 
 <script>

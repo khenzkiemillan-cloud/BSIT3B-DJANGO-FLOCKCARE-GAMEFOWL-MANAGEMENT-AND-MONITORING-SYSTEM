@@ -4,7 +4,6 @@ from .models import (
     BreedingRecord,
     Chicken,
     ChickenClassification,
-    Expense,
     FeedRecord,
     HealthRecord,
     Supply,
@@ -50,10 +49,3 @@ class SupplyAdmin(admin.ModelAdmin):
     list_display = ('name', 'supply_type', 'quantity', 'unit', 'minimum_stock', 'expiration_date')
     list_filter = ('supply_type',)
     search_fields = ('name', 'unit')
-
-
-@admin.register(Expense)
-class ExpenseAdmin(admin.ModelAdmin):
-    list_display = ('expense_name', 'amount', 'expense_date')
-    list_filter = ('expense_date',)
-    search_fields = ('expense_name', 'description')

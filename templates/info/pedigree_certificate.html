@@ -230,10 +230,6 @@
           <span class="overview-label">Weight:</span>
           <span class="overview-value">{% if bird.weight_grams %}{{ bird.weight_grams }} grams{% else %}N/A{% endif %}</span>
         </div>
-        <div class="overview-row">
-          <span class="overview-label">Fight Record:</span>
-          <span class="overview-value">{{ bird.wins }}W - {{ bird.losses }}L - {{ bird.draws }}D</span>
-        </div>
       </div>
     </div>
 
@@ -280,26 +276,28 @@
         </div>
       </div>
 
-      <!-- Overview or Fight History -->
+      <!-- Bird summary -->
       <div class="tree-column">
         <div class="tree-card" style="border-left-color: #d97706;">
-          <div class="node-title">Recent Fight History</div>
-          {% if fights %}
-            <div style="font-size: 11px; margin-top: 6px;">
-              {% for f in fights %}
-                <div style="margin-bottom: 4px; display: flex; justify-content: space-between;">
-                  <span>{{ f.event_name|truncatechars:18 }}</span>
-                  <strong style="color: {% if f.result == 'win' %}#16a34a{% elif f.result == 'loss' %}#dc2626{% else %}#d97706{% endif %};">
-                    {{ f.get_result_display }}
-                  </strong>
-                </div>
-              {% endfor %}
+          <div class="node-title">Bird Summary</div>
+          <div style="font-size: 11px; margin-top: 6px;">
+            <div style="margin-bottom: 4px; display: flex; justify-content: space-between;">
+              <span>Status</span>
+              <strong>{{ bird.status }}</strong>
             </div>
-          {% else %}
-            <div style="color: #94a3b8; font-size: 11px; margin-top: 6px;">
-              No sanctioned fights recorded yet.
+            <div style="margin-bottom: 4px; display: flex; justify-content: space-between;">
+              <span>Cage / Pen</span>
+              <strong>{{ bird.cage_number|default:"Unrecorded" }}</strong>
             </div>
-          {% endif %}
+            <div style="margin-bottom: 4px; display: flex; justify-content: space-between;">
+              <span>Sire</span>
+              <strong>{{ bird.sire|default:"Unrecorded" }}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>Dam</span>
+              <strong>{{ bird.dam|default:"Unrecorded" }}</strong>
+            </div>
+          </div>
         </div>
       </div>
     </div>

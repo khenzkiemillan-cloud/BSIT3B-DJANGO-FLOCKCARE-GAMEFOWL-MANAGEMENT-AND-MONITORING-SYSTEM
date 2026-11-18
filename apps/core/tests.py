@@ -20,7 +20,6 @@ class AdminRegistrationTests(TestCase):
             'admin:core_healthrecord_changelist',
             'admin:core_feedrecord_changelist',
             'admin:core_supply_changelist',
-            'admin:core_expense_changelist',
             'admin:info_breed_changelist',
             'admin:info_flockmember_changelist',
             'admin:info_healthrecord_changelist',

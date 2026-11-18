@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
-    Breed, FlockMember, HealthRecord, Medicine, WeightLog, Expense,
+    Breed, FlockMember, HealthRecord, Medicine, WeightLog,
 )
 
 
@@ -25,8 +25,6 @@ class FlockTestCase(TestCase):
             breed=self.breed,
             gender='Cock',
             status='Active',
-            wins=3,
-            losses=1,
         )
 
 
@@ -46,8 +44,6 @@ class DashboardTests(FlockTestCase):
         self.assertTemplateUsed(response, 'home.html')
         self.assertEqual(response.context['total_birds'], 1)
         self.assertEqual(response.context['active_birds'], 1)
-        self.assertEqual(response.context['total_wins'], 3)
-        self.assertEqual(response.context['total_losses'], 1)
         self.assertContains(response, 'K-001')
         self.assertContains(response, 'Newcastle booster')
         self.assertContains(response, reverse('info:info_list'))
@@ -59,34 +55,6 @@ class DashboardTests(FlockTestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse('login'), response.url)
-
-    def test_dashboard_includes_draws_in_fight_totals(self):
-        self.bird.draws = 2
-        self.bird.save(update_fields=['draws'])
-
-        response = self.client.get(reverse('dashboard'))
-
-        self.assertEqual(response.context['total_draws'], 2)
-        self.assertEqual(response.context['total_fights'], 6)
-        self.assertContains(response, 'Draws')
-
-    def test_dashboard_summarizes_flock_expenses(self):
-        Expense.objects.create(
-            user=self.user,
-            bird=self.bird,
-            category='Feed',
-            amount=Decimal('1250.00'),
-            date=timezone.localdate(),
-            description='Weekly feed',
-        )
-
-        response = self.client.get(reverse('dashboard'))
-
-        self.assertEqual(response.context['expense_total'], Decimal('1250.00'))
-        self.assertEqual(response.context['expense_month'], Decimal('1250.00'))
-        self.assertEqual(response.context['expense_count'], 1)
-        self.assertEqual(response.context['expense_flock_count'], 1)
-        self.assertContains(response, 'Expense summary')
 
 
 class FlockMemberPageTests(FlockTestCase):
@@ -129,8 +97,6 @@ class FlockMemberAjaxTests(FlockTestCase):
             'status': 'Active',
             'birth_date': '2026-01-15',
             'weight_grams': '1850',
-            'wins': '2',
-            'losses': '0',
             'sire': 'K-001',
             'dam': '',
         })
@@ -139,15 +105,12 @@ class FlockMemberAjaxTests(FlockTestCase):
         member = FlockMember.objects.get(user=self.user, tag_number='K-003')
         self.assertEqual(member.breed, self.breed)
         self.assertEqual(member.weight_grams, 1850)
-        self.assertEqual(member.wins, 2)
 
     def test_duplicate_tag_number_is_rejected(self):
         response = self.client.post(reverse('info:info_save_ajax'), {
             'tag_number': 'k-001',
             'gender': 'Cock',
             'status': 'Active',
-            'wins': '0',
-            'losses': '0',
         })
 
         self.assertEqual(response.status_code, 400)
@@ -160,8 +123,6 @@ class FlockMemberAjaxTests(FlockTestCase):
             'breed': self.breed.pk,
             'gender': 'Cock',
             'status': 'Retired',
-            'wins': '4',
-            'losses': '2',
             'sire': '',
             'dam': '',
         })
@@ -169,7 +130,6 @@ class FlockMemberAjaxTests(FlockTestCase):
         self.assertEqual(response.status_code, 200)
         self.bird.refresh_from_db()
         self.assertEqual(self.bird.status, 'Retired')
-        self.assertEqual(self.bird.wins, 4)
 
     def test_cannot_edit_another_users_member(self):
         other_user = get_user_model().objects.create_user(
@@ -188,8 +148,6 @@ class FlockMemberAjaxTests(FlockTestCase):
             'tag_number': 'X-999',
             'gender': 'Hen',
             'status': 'Retired',
-            'wins': '0',
-            'losses': '0',
         })
 
         self.assertEqual(response.status_code, 404)
@@ -208,8 +166,6 @@ class FlockMemberAjaxTests(FlockTestCase):
             'new_breed': 'Sweater',
             'gender': 'Hen',
             'status': 'Active',
-            'wins': '0',
-            'losses': '0',
         })
 
         self.assertEqual(response.status_code, 200)
@@ -222,8 +178,6 @@ class FlockMemberAjaxTests(FlockTestCase):
             'tag_number': 'K-005',
             'gender': 'Hen',
             'status': 'Active',
-            'wins': '0',
-            'losses': '0',
         })
 
         self.assertEqual(response.status_code, 404)
@@ -248,6 +202,18 @@ class FlockMemberAjaxTests(FlockTestCase):
 
 
 class HealthRecordTests(FlockTestCase):
+    def make_medicine(self, **overrides):
+        data = {
+            'user': self.user,
+            'name': 'Ivermectin',
+            'category': 'Dewormer',
+            'unit': 'ml',
+            'stock_quantity': Decimal('10.00'),
+            'low_stock_threshold': Decimal('2.00'),
+        }
+        data.update(overrides)
+        return Medicine.objects.create(**data)
+
     def test_save_health_record(self):
         response = self.client.post(reverse('info:health_record_save_ajax'), {
             'bird_id': self.bird.pk,
@@ -262,6 +228,208 @@ class HealthRecordTests(FlockTestCase):
         record = HealthRecord.objects.get(bird=self.bird)
         self.assertEqual(record.title, 'Quarterly deworming')
         self.assertEqual(record.notes, 'No adverse reaction.')
+
+    def test_saving_health_record_deducts_medicine_stock(self):
+        medicine = self.make_medicine()
+
+        response = self.client.post(reverse('info:health_record_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'record_type': 'Deworming',
+            'title': 'Ivermectin routine deworming',
+            'medicine': medicine.pk,
+            'quantity_used': '2.5',
+            'date_administered': '2026-11-01',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        medicine.refresh_from_db()
+        record = HealthRecord.objects.get(bird=self.bird)
+        self.assertEqual(record.medicine, medicine)
+        self.assertEqual(record.quantity_used, Decimal('2.50'))
+        self.assertEqual(medicine.stock_quantity, Decimal('7.50'))
+
+    def test_insufficient_stock_blocks_health_record(self):
+        medicine = self.make_medicine(stock_quantity=Decimal('1.00'))
+
+        response = self.client.post(reverse('info:health_record_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'record_type': 'Deworming',
+            'title': 'Ivermectin routine deworming',
+            'medicine': medicine.pk,
+            'quantity_used': '2',
+            'date_administered': '2026-11-01',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('not enough', response.json()['error'].lower())
+        self.assertFalse(HealthRecord.objects.exists())
+        medicine.refresh_from_db()
+        self.assertEqual(medicine.stock_quantity, Decimal('1.00'))
+
+    def test_editing_health_record_restores_and_rededucts_stock(self):
+        medicine = self.make_medicine()
+
+        self.client.post(reverse('info:health_record_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'record_type': 'Deworming',
+            'title': 'Ivermectin routine deworming',
+            'medicine': medicine.pk,
+            'quantity_used': '2',
+            'date_administered': '2026-11-01',
+        })
+        record = HealthRecord.objects.get(bird=self.bird)
+
+        response = self.client.post(reverse('info:health_record_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'record_id': record.pk,
+            'record_type': 'Deworming',
+            'title': 'Ivermectin routine deworming',
+            'medicine': medicine.pk,
+            'quantity_used': '5',
+            'date_administered': '2026-11-01',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        medicine.refresh_from_db()
+        record.refresh_from_db()
+        self.assertEqual(record.quantity_used, Decimal('5.00'))
+        self.assertEqual(medicine.stock_quantity, Decimal('5.00'))
+
+    def test_switching_medicine_restores_previous_stock(self):
+        old_medicine = self.make_medicine(name='Old dewormer')
+        new_medicine = self.make_medicine(name='New dewormer')
+
+        self.client.post(reverse('info:health_record_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'record_type': 'Deworming',
+            'title': 'Deworming',
+            'medicine': old_medicine.pk,
+            'quantity_used': '3',
+            'date_administered': '2026-11-01',
+        })
+        record = HealthRecord.objects.get(bird=self.bird)
+
+        response = self.client.post(reverse('info:health_record_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'record_id': record.pk,
+            'record_type': 'Deworming',
+            'title': 'Deworming',
+            'medicine': new_medicine.pk,
+            'quantity_used': '1',
+            'date_administered': '2026-11-01',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        old_medicine.refresh_from_db()
+        new_medicine.refresh_from_db()
+        self.assertEqual(old_medicine.stock_quantity, Decimal('10.00'))
+        self.assertEqual(new_medicine.stock_quantity, Decimal('9.00'))
+
+    def test_delete_health_record_restores_medicine_stock(self):
+        medicine = self.make_medicine()
+
+        self.client.post(reverse('info:health_record_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'record_type': 'Deworming',
+            'title': 'Deworming',
+            'medicine': medicine.pk,
+            'quantity_used': '4',
+            'date_administered': '2026-11-01',
+        })
+        record = HealthRecord.objects.get(bird=self.bird)
+
+        response = self.client.post(
+            reverse('info:health_record_delete_ajax', args=[record.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        medicine.refresh_from_db()
+        self.assertEqual(medicine.stock_quantity, Decimal('10.00'))
+
+    def test_quantity_without_medicine_is_rejected(self):
+        response = self.client.post(reverse('info:health_record_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'record_type': 'Deworming',
+            'title': 'Deworming',
+            'quantity_used': '2',
+            'date_administered': '2026-11-01',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(HealthRecord.objects.exists())
+
+    def test_cannot_use_another_users_medicine(self):
+        other_user = get_user_model().objects.create_user(
+            username='other-medicine-owner',
+            password='test-password',
+        )
+        other_medicine = Medicine.objects.create(
+            user=other_user,
+            name='Private dewormer',
+            category='Dewormer',
+            stock_quantity=Decimal('10.00'),
+        )
+
+        response = self.client.post(reverse('info:health_record_save_ajax'), {
+            'bird_id': self.bird.pk,
+            'record_type': 'Deworming',
+            'title': 'Deworming',
+            'medicine': other_medicine.pk,
+            'quantity_used': '1',
+            'date_administered': '2026-11-01',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(HealthRecord.objects.exists())
+
+    def test_batch_health_deducts_total_stock(self):
+        medicine = self.make_medicine()
+        second_bird = FlockMember.objects.create(
+            user=self.user,
+            tag_number='K-002',
+            gender='Stag',
+            status='Active',
+        )
+
+        response = self.client.post(reverse('info:batch_action_ajax'), {
+            'action': 'batch_health',
+            'ids[]': [self.bird.pk, second_bird.pk],
+            'record_type': 'Deworming',
+            'title': 'Batch deworming',
+            'medicine': medicine.pk,
+            'quantity_used': '3',
+            'date_administered': '2026-11-01',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        medicine.refresh_from_db()
+        self.assertEqual(medicine.stock_quantity, Decimal('4.00'))
+        self.assertEqual(HealthRecord.objects.count(), 2)
+
+    def test_batch_health_rejects_insufficient_total_stock(self):
+        medicine = self.make_medicine(stock_quantity=Decimal('5.00'))
+        second_bird = FlockMember.objects.create(
+            user=self.user,
+            tag_number='K-003',
+            gender='Stag',
+            status='Active',
+        )
+
+        response = self.client.post(reverse('info:batch_action_ajax'), {
+            'action': 'batch_health',
+            'ids[]': [self.bird.pk, second_bird.pk],
+            'record_type': 'Deworming',
+            'title': 'Batch deworming',
+            'medicine': medicine.pk,
+            'quantity_used': '3',
+            'date_administered': '2026-11-01',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('not enough', response.json()['error'].lower())
+        medicine.refresh_from_db()
+        self.assertEqual(medicine.stock_quantity, Decimal('5.00'))
+        self.assertFalse(HealthRecord.objects.exists())
 
     def test_next_due_date_cannot_precede_administered_date(self):
         response = self.client.post(reverse('info:health_record_save_ajax'), {
@@ -418,6 +586,21 @@ class HealthSchedulePageTests(FlockTestCase):
         self.assertEqual(response.context['counts']['due_soon'], 1)
         self.assertContains(response, 'Overdue booster')
         self.assertContains(response, 'Upcoming deworming')
+
+    def test_flock_and_health_pages_render_with_cabinet_medicine(self):
+        Medicine.objects.create(
+            user=self.user,
+            name='Test vaccine',
+            category='Vaccine',
+            unit='dose',
+            stock_quantity=Decimal('5.00'),
+        )
+
+        for page_name in ('info:info_list', 'info:health_list'):
+            with self.subTest(page=page_name):
+                response = self.client.get(reverse(page_name))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'Test vaccine')
 
     def test_health_page_filters_overdue_records(self):
         response = self.client.get(reverse('info:health_list'), {'state': 'overdue'})
@@ -628,50 +811,6 @@ class MedicineCabinetTests(FlockTestCase):
         self.out_of_stock_medicine.refresh_from_db()
         self.assertEqual(self.out_of_stock_medicine.stock_quantity, Decimal('10.50'))
         self.assertEqual(response.json()['stock_quantity'], '10.5')
-        self.assertFalse(Expense.objects.exists())
-
-    def test_restock_logs_expense_with_supplied_total(self):
-        response = self.client.post(reverse('info:medicine_restock_ajax'), {
-            'id': self.out_of_stock_medicine.pk,
-            'amount': '10',
-            'record_expense': 'on',
-            'total_cost': '480.50',
-        })
-
-        self.assertEqual(response.status_code, 200)
-        expense = Expense.objects.get(user=self.user)
-        self.assertIsNone(expense.bird)
-        self.assertEqual(expense.category, 'Medicine')
-        self.assertEqual(expense.amount, Decimal('480.50'))
-        self.assertIn(self.out_of_stock_medicine.name, expense.description)
-        self.assertTrue(response.json()['expense_logged'])
-
-    def test_restock_expense_uses_unit_cost_when_total_is_blank(self):
-        self.low_stock_medicine.unit_cost = Decimal('12.50')
-        self.low_stock_medicine.save(update_fields=['unit_cost'])
-
-        response = self.client.post(reverse('info:medicine_restock_ajax'), {
-            'id': self.low_stock_medicine.pk,
-            'amount': '4',
-            'record_expense': 'on',
-        })
-
-        self.assertEqual(response.status_code, 200)
-        expense = Expense.objects.get(user=self.user)
-        self.assertEqual(expense.amount, Decimal('50.00'))
-
-    def test_restock_expense_requires_total_when_unit_cost_is_zero(self):
-        response = self.client.post(reverse('info:medicine_restock_ajax'), {
-            'id': self.out_of_stock_medicine.pk,
-            'amount': '2',
-            'record_expense': 'on',
-        })
-
-        self.assertEqual(response.status_code, 400)
-        self.out_of_stock_medicine.refresh_from_db()
-        self.assertEqual(self.out_of_stock_medicine.stock_quantity, Decimal('0.00'))
-        self.assertFalse(Expense.objects.exists())
-
     def test_restock_rejects_invalid_amount(self):
         response = self.client.post(reverse('info:medicine_restock_ajax'), {
             'id': self.low_stock_medicine.pk,
@@ -820,48 +959,6 @@ class MultiUserTagScopingTests(FlockTestCase):
         self.assertNotEqual(self.bird.user, bird2.user)
 
 
-class FightRecordTests(FlockTestCase):
-    def test_save_fight_record_and_sync_counters(self):
-        response = self.client.post(reverse('info:fight_record_save_ajax'), {
-            'bird_id': self.bird.pk,
-            'event_name': 'Derby Fiesta 2026',
-            'fight_date': timezone.localdate(),
-            'result': 'win',
-            'weight_grams': 2100,
-            'opponent': 'Farm X',
-        })
-        self.assertEqual(response.status_code, 200)
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.wins, 1)
-        self.assertEqual(self.bird.losses, 0)
-        self.assertEqual(self.bird.draws, 0)
-
-        # Log a loss
-        self.client.post(reverse('info:fight_record_save_ajax'), {
-            'bird_id': self.bird.pk,
-            'event_name': 'Hackfight',
-            'fight_date': timezone.localdate(),
-            'result': 'loss',
-        })
-        self.bird.refresh_from_db()
-        self.assertEqual(self.bird.wins, 1)
-        self.assertEqual(self.bird.losses, 1)
-
-    def test_get_fights_ajax(self):
-        from .models import FightRecord
-        FightRecord.objects.create(
-            bird=self.bird,
-            event_name='4-Cock Derby',
-            fight_date=timezone.localdate(),
-            result='win',
-        )
-        response = self.client.get(reverse('info:fight_records_ajax', args=[self.bird.pk]))
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(len(data['data']), 1)
-        self.assertEqual(data['data'][0]['event_name'], '4-Cock Derby')
-
-
 class WeightLogTests(FlockTestCase):
     def test_weight_log_creates_and_updates_bird_weight(self):
         response = self.client.post(reverse('info:weight_log_save_ajax'), {
@@ -880,6 +977,8 @@ class InlineQuickFormRenderTests(FlockTestCase):
     def test_flock_page_renders_quick_member_form(self):
         response = self.client.get(reverse('info:info_list'))
         self.assertContains(response, 'id="quickMemberForm"')
+        self.assertContains(response, 'class="collapse" id="quickMemberFormCollapse"')
+        self.assertContains(response, 'data-bs-target="#quickMemberFormCollapse"')
 
     def test_dashboard_does_not_render_quick_member_form(self):
         response = self.client.get(reverse('dashboard'))
@@ -889,6 +988,8 @@ class InlineQuickFormRenderTests(FlockTestCase):
     def test_breeding_page_renders_quick_pen_form(self):
         response = self.client.get(reverse('info:breeding_list'))
         self.assertContains(response, 'id="quickPenForm"')
+        self.assertContains(response, 'class="collapse" id="quickPenFormCollapse"')
+        self.assertContains(response, 'data-bs-target="#quickPenFormCollapse"')
 
     def test_breeding_page_binds_quick_pen_script_inside_turbo_frame(self):
         response = self.client.get(reverse('info:breeding_list'))
@@ -903,10 +1004,14 @@ class InlineQuickFormRenderTests(FlockTestCase):
     def test_health_page_renders_quick_health_form(self):
         response = self.client.get(reverse('info:health_list'))
         self.assertContains(response, 'id="quickHealthForm"')
+        self.assertContains(response, 'class="collapse" id="quickHealthFormCollapse"')
+        self.assertContains(response, 'data-bs-target="#quickHealthFormCollapse"')
 
     def test_medicine_page_renders_quick_medicine_form(self):
         response = self.client.get(reverse('info:medicine_list'))
         self.assertContains(response, 'id="quickMedicineForm"')
+        self.assertContains(response, 'class="collapse" id="quickMedicineFormCollapse"')
+        self.assertContains(response, 'data-bs-target="#quickMedicineFormCollapse"')
 
 
 class BreedingModuleTests(FlockTestCase):
@@ -974,132 +1079,6 @@ class PedigreeCertificateTests(FlockTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Certificate of Pedigree')
         self.assertContains(response, self.bird.tag_number)
-
-
-class ExpenseTests(FlockTestCase):
-    def record_expense(self, **overrides):
-        data = {
-            'bird': self.bird.pk,
-            'category': 'Feed',
-            'amount': '1500.00',
-            'date': str(timezone.localdate()),
-            'description': 'Weekly gamefowl feed',
-            'notes': 'Bought from the local supplier',
-        }
-        data.update(overrides)
-        return self.client.post(reverse('info:expense_save_ajax'), data)
-
-    def test_record_expense_links_to_flock_member(self):
-        response = self.record_expense()
-
-        self.assertEqual(response.status_code, 200)
-        expense = Expense.objects.get(user=self.user)
-        self.assertEqual(expense.bird, self.bird)
-        self.assertEqual(expense.category, 'Feed')
-        self.assertEqual(expense.amount, Decimal('1500.00'))
-        self.assertEqual(expense.description, 'Weekly gamefowl feed')
-
-    def test_expenses_page_lists_entries_and_totals(self):
-        self.record_expense()
-
-        response = self.client.get(reverse('info:expense_list'))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'info/expense_list.html')
-        self.assertContains(response, 'Weekly gamefowl feed')
-        self.assertContains(response, self.bird.tag_number)
-        self.assertContains(response, 'Expenses by flock member')
-        self.assertEqual(response.context['total_expenses'], Decimal('1500.00'))
-        self.assertEqual(response.context['month_expenses'], Decimal('1500.00'))
-        self.assertEqual(response.context['counts']['flock_count'], 1)
-
-    def test_expense_requires_a_flock_member(self):
-        response = self.record_expense(bird='')
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('bird', response.json()['errors'])
-        self.assertFalse(Expense.objects.exists())
-
-    def test_expense_page_only_shows_current_users_expenses(self):
-        other = get_user_model().objects.create_user(
-            username='other-expense-owner', password='test-password'
-        )
-        other_bird = FlockMember.objects.create(
-            user=other, tag_number='OTHER-004', gender='Stag', status='Active',
-        )
-        Expense.objects.create(
-            user=other,
-            bird=other_bird,
-            category='Medicine',
-            amount=Decimal('500.00'),
-            date=timezone.localdate(),
-            description='Other owner expense',
-        )
-        self.record_expense()
-
-        response = self.client.get(reverse('info:expense_list'))
-
-        self.assertContains(response, 'Weekly gamefowl feed')
-        self.assertNotContains(response, 'Other owner expense')
-        self.assertEqual(response.context['total_expenses'], Decimal('1500.00'))
-
-    def test_update_expense(self):
-        self.record_expense()
-        expense = Expense.objects.get()
-
-        response = self.client.post(reverse('info:expense_save_ajax'), {
-            'id': expense.pk,
-            'bird': self.bird.pk,
-            'category': 'Medicine',
-            'amount': '750.50',
-            'date': str(timezone.localdate()),
-            'description': 'Vitamins and dewormer',
-        })
-
-        self.assertEqual(response.status_code, 200)
-        expense.refresh_from_db()
-        self.assertEqual(expense.category, 'Medicine')
-        self.assertEqual(expense.amount, Decimal('750.50'))
-        self.assertEqual(expense.description, 'Vitamins and dewormer')
-        self.assertEqual(Expense.objects.filter(user=self.user).count(), 1)
-
-    def test_delete_expense(self):
-        self.record_expense()
-        expense = Expense.objects.get()
-
-        response = self.client.post(reverse('info:expense_delete_ajax', args=[expense.pk]))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(Expense.objects.exists())
-
-    def test_cannot_delete_another_users_expense(self):
-        other = get_user_model().objects.create_user(
-            username='other-expense-deleter', password='test-password'
-        )
-        other_bird = FlockMember.objects.create(
-            user=other, tag_number='OTHER-005', gender='Hen', status='Active',
-        )
-        expense = Expense.objects.create(
-            user=other,
-            bird=other_bird,
-            category='Feed',
-            amount=Decimal('300.00'),
-            date=timezone.localdate(),
-            description='Not your expense',
-        )
-
-        response = self.client.post(reverse('info:expense_delete_ajax', args=[expense.pk]))
-
-        self.assertEqual(response.status_code, 404)
-        self.assertTrue(Expense.objects.filter(pk=expense.pk).exists())
-
-    def test_expenses_page_requires_login(self):
-        self.client.logout()
-
-        response = self.client.get(reverse('info:expense_list'))
-
-        self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse('login'), response.url)
 
 
 class BreedQuickAddTests(FlockTestCase):

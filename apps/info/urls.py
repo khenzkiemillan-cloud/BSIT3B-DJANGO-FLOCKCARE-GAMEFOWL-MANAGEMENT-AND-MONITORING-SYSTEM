@@ -13,11 +13,6 @@ urlpatterns = [
     path('ajax/delete/<int:pk>/', views.info_delete_ajax, name='info_delete_ajax'),
     path('ajax/breed/create/', views.breed_create_ajax, name='breed_create_ajax'),
 
-    # Fight Records
-    path('ajax/fight/<int:pk>/', views.fight_records_ajax, name='fight_records_ajax'),
-    path('ajax/fight/save/', views.fight_record_save_ajax, name='fight_record_save_ajax'),
-    path('ajax/fight/delete/<int:pk>/', views.fight_record_delete_ajax, name='fight_record_delete_ajax'),
-
     # Weight Logs
     path('ajax/weight/<int:pk>/', views.weight_logs_ajax, name='weight_logs_ajax'),
     path('ajax/weight/save/', views.weight_log_save_ajax, name='weight_log_save_ajax'),
@@ -44,11 +39,6 @@ urlpatterns = [
     path('ajax/medicines/save/', views.medicine_save_ajax, name='medicine_save_ajax'),
     path('ajax/medicines/delete/<int:pk>/', views.medicine_delete_ajax, name='medicine_delete_ajax'),
     path('ajax/medicines/restock/', views.medicine_restock_ajax, name='medicine_restock_ajax'),
-
-    # Expenses
-    path('expenses/', views.expense_list_page, name='expense_list'),
-    path('ajax/expenses/save/', views.expense_save_ajax, name='expense_save_ajax'),
-    path('ajax/expenses/delete/<int:pk>/', views.expense_delete_ajax, name='expense_delete_ajax'),
 
     # Batch Actions
     path('ajax/batch/', views.flock_batch_action_ajax, name='batch_action_ajax'),

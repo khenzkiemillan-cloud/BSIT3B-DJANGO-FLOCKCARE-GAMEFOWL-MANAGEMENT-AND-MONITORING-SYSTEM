@@ -26,8 +26,13 @@
           Choose a broodcock and broodhen from your flock, then set the pairing date and status.
         </div>
       </div>
-      <span class="badge bg-pink text-white ms-auto">Breeding</span>
+      <button type="button" class="btn btn-primary ms-auto"
+              data-bs-toggle="collapse" data-bs-target="#quickPenFormCollapse"
+              aria-expanded="false" aria-controls="quickPenFormCollapse">
+        <i class="fas fa-plus-circle me-2" aria-hidden="true"></i>Add breeding pen
+      </button>
     </div>
+    <div class="collapse" id="quickPenFormCollapse">
     <form id="quickPenForm" novalidate>
       {% csrf_token %}
       <div class="card-body">
@@ -97,6 +102,7 @@
         </button>
       </div>
     </form>
+    </div>
   </div>
 
   <div class="row row-cards">
@@ -127,13 +133,7 @@
                     {{ pen.sire.breed.name|default:"Pure" }}
                   </div>
                   <div class="dh-record small mt-1">
-                    <span class="dh-record-wins">{{ pen.sire.wins }}W</span>
-                    <span class="dh-record-sep">&ndash;</span>
-                    <span class="dh-record-losses">{{ pen.sire.losses }}L</span>
-                    {% if pen.sire.draws %}
-                      <span class="dh-record-sep">&ndash;</span>
-                      <span class="text-muted">{{ pen.sire.draws }}D</span>
-                    {% endif %}
+                    <span class="text-muted">—</span>
                   </div>
                 </div>
               </div>
@@ -148,13 +148,7 @@
                     {{ pen.dam.breed.name|default:"Pure" }}
                   </div>
                   <div class="dh-record small mt-1">
-                    <span class="dh-record-wins">{{ pen.dam.wins }}W</span>
-                    <span class="dh-record-sep">&ndash;</span>
-                    <span class="dh-record-losses">{{ pen.dam.losses }}L</span>
-                    {% if pen.dam.draws %}
-                      <span class="dh-record-sep">&ndash;</span>
-                      <span class="text-muted">{{ pen.dam.draws }}D</span>
-                    {% endif %}
+                    <span class="text-muted">—</span>
                   </div>
                 </div>
               </div>
@@ -298,7 +292,6 @@
                                 data-breed="{{ c.breed.name|default:'Unclassified' }}"
                                 data-gender="{{ c.gender }}"
                                 data-status="{{ c.status }}"
-                                data-wins="{{ c.wins }}">
                           {{ c.tag_number }} — {{ c.breed.name|default:"Unclassified" }} • {{ c.gender }} • {{ c.status }}
                         </option>
                       {% endfor %}
@@ -313,7 +306,6 @@
                                 data-breed="{{ h.breed.name|default:'Unclassified' }}"
                                 data-gender="{{ h.gender }}"
                                 data-status="{{ h.status }}"
-                                data-wins="{{ h.wins }}">
                           {{ h.tag_number }} — {{ h.breed.name|default:"Unclassified" }} • {{ h.gender }} • {{ h.status }}
                         </option>
                       {% endfor %}
@@ -503,7 +495,6 @@
         (option.dataset.breed || 'Unclassified') + ' • ' +
         (option.dataset.gender || '') + ' • ' +
         (option.dataset.status || '') + ' • ' +
-        (option.dataset.wins || 0) + ' win(s)';
     }
 
     function refreshPairPreviews() {
