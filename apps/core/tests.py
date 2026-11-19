@@ -1,7 +1,13 @@
+from datetime import timedelta
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.template.loader import get_template
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
+
+from apps.info.models import FlockMember, HealthRecord, Medicine
 
 
 class AdminRegistrationTests(TestCase):
@@ -150,3 +156,128 @@ class AuthenticationRedirectTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse('info:info_list'))
+
+
+class TopbarNavigationTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='handler',
+            password='secret1234',
+        )
+        self.client.force_login(self.user)
+        self.bird = FlockMember.objects.create(
+            user=self.user,
+            tag_number='K-001',
+            gender='Cock',
+            status='Active',
+        )
+
+    def test_topbar_renders_search_quick_add_and_alert_frame(self):
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'data-topbar-search')
+        self.assertContains(
+            response,
+            f'<turbo-frame id="topbar-alerts" src="{reverse("nav_alerts")}"',
+            html=False,
+        )
+        self.assertContains(response, 'Quick add')
+
+    def test_nav_alerts_reports_overdue_stock_and_expiry_issues(self):
+        today = timezone.localdate()
+        HealthRecord.objects.create(
+            bird=self.bird,
+            record_type='Vaccination',
+            title='Late booster',
+            date_administered=today - timedelta(days=40),
+            next_due_date=today - timedelta(days=2),
+        )
+        Medicine.objects.create(
+            user=self.user,
+            name='Low vaccine',
+            category='Vaccine',
+            unit='ml',
+            stock_quantity=Decimal('1.00'),
+            low_stock_threshold=Decimal('5.00'),
+        )
+        Medicine.objects.create(
+            user=self.user,
+            name='Expired dewormer',
+            category='Dewormer',
+            unit='ml',
+            stock_quantity=Decimal('10.00'),
+            expiration_date=today - timedelta(days=1),
+        )
+
+        response = self.client.get(reverse('nav_alerts'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'theme/partials/topbar_alerts.html')
+        self.assertContains(response, '<turbo-frame id="topbar-alerts">')
+        alerts = response.context['nav_alerts']
+        self.assertEqual(alerts['overdue_count'], 1)
+        self.assertEqual(alerts['low_stock_count'], 1)
+        self.assertEqual(alerts['expired_count'], 1)
+        self.assertEqual(alerts['total'], 3)
+        self.assertContains(response, 'Late booster')
+        self.assertContains(response, 'Low vaccine')
+        self.assertContains(response, 'Expired dewormer')
+
+    def test_single_alert_label_uses_singular_grammar(self):
+        Medicine.objects.create(
+            user=self.user,
+            name='Only low stock item',
+            category='Vaccine',
+            unit='ml',
+            stock_quantity=Decimal('0.00'),
+            low_stock_threshold=Decimal('1.00'),
+        )
+
+        response = self.client.get(reverse('nav_alerts'))
+
+        self.assertContains(response, '1 alert needs attention')
+
+    def test_due_soon_tasks_count_as_alerts_instead_of_empty_state(self):
+        today = timezone.localdate()
+        HealthRecord.objects.create(
+            bird=self.bird,
+            record_type='Vaccination',
+            title='Upcoming booster',
+            date_administered=today,
+            next_due_date=today + timedelta(days=10),
+        )
+
+        response = self.client.get(reverse('nav_alerts'))
+
+        alerts = response.context['nav_alerts']
+        self.assertEqual(alerts['due_soon_count'], 1)
+        self.assertEqual(alerts['total'], 1)
+        self.assertContains(response, 'Upcoming booster')
+        self.assertNotContains(response, "You're all caught up")
+
+    def test_nav_alerts_ignores_other_users_items(self):
+        other_user = get_user_model().objects.create_user(
+            username='other-handler',
+            password='secret1234',
+        )
+        Medicine.objects.create(
+            user=other_user,
+            name='Private low stock item',
+            category='Vaccine',
+            unit='ml',
+            stock_quantity=Decimal('0.00'),
+            low_stock_threshold=Decimal('1.00'),
+        )
+
+        response = self.client.get(reverse('nav_alerts'))
+
+        self.assertEqual(response.context['nav_alerts']['total'], 0)
+        self.assertNotContains(response, 'Private low stock item')
+
+    def test_nav_alerts_requires_login(self):
+        self.client.logout()
+
+        response = self.client.get(reverse('nav_alerts'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('login'), response.url)

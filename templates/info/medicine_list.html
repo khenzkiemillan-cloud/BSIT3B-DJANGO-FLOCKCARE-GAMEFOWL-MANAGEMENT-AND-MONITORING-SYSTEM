@@ -74,7 +74,6 @@
             <li><span class="text-danger">*</span> Category</li>
             <li><span class="text-danger">*</span> Unit</li>
             <li><span class="text-danger">*</span> Stock on hand</li>
-            <li>Cost per unit (₱)</li>
             <li>Low stock alert level</li>
             <li>Expiration date &amp; notes</li>
           </ul>
@@ -127,14 +126,6 @@
                    class="form-control" min="0" step="0.01" value="0" required>
           </div>
           <div class="col-sm-6 col-lg-3">
-            <label class="form-label" for="quick_medicine_cost">Cost per unit (₱)</label>
-            <div class="input-group">
-              <span class="input-group-text">₱</span>
-              <input type="number" name="unit_cost" id="quick_medicine_cost"
-                     class="form-control" min="0" step="0.01" value="0">
-            </div>
-          </div>
-          <div class="col-sm-6 col-lg-3">
             <label class="form-label" for="quick_medicine_threshold">Low stock alert at</label>
             <input type="number" name="low_stock_threshold" id="quick_medicine_threshold"
                    class="form-control" min="0" step="0.01" value="0">
@@ -143,7 +134,7 @@
             <label class="form-label" for="quick_medicine_expiration">Expiration date</label>
             <input type="date" name="expiration_date" id="quick_medicine_expiration" class="form-control">
           </div>
-          <div class="col-sm-6 col-lg-6">
+          <div class="col-sm-6 col-lg-9">
             <label class="form-label" for="quick_medicine_notes">Notes</label>
             <input type="text" name="notes" id="quick_medicine_notes" class="form-control"
                    placeholder="e.g. dosage, storage instructions, supplier">
@@ -223,7 +214,6 @@
         <span class="text-muted fw-normal">— results for "{{ query }}"</span>
         {% endif %}
       </div>
-      <span class="badge bg-success-lt text-success ms-auto me-2">Cabinet value ₱{{ inventory_value|floatformat:2 }}</span>
       <span class="badge bg-primary-lt text-primary">{{ medicines.paginator.count }} item{{ medicines.paginator.count|pluralize }}</span>
     </div>
     <div class="table-responsive">
@@ -233,7 +223,6 @@
             <th>Medicine</th>
             <th>Category</th>
             <th class="text-end">Stock</th>
-            <th class="text-end">Cost</th>
             <th>Expiry</th>
             <th>Status</th>
             <th class="w-1">Actions</th>
@@ -244,7 +233,7 @@
           <tr data-medicine-id="{{ medicine.id }}">
             <td class="fw-semibold" data-label="Medicine">
               <span class="dh-table-tag">
-                <span class="dh-table-avatar"><i class="fas fa-prescription-bottle-medical"></i></span>
+                <span class="dh-table-avatar"><i class="fas {{ medicine.category_icon }}"></i></span>
                 <span class="dh-tag">{{ medicine.name }}</span>
               </span>
               {% if medicine.notes %}
@@ -252,16 +241,22 @@
               {% endif %}
             </td>
             <td data-label="Category">
-              <span class="badge bg-blue-lt text-blue">{{ medicine.category }}</span>
+              <span class="badge bg-blue-lt text-blue">
+                <i class="fas {{ medicine.category_icon }} me-1" aria-hidden="true"></i>{{ medicine.category }}
+              </span>
             </td>
             <td class="text-end" data-label="Stock">
-              <span class="fw-medium">{{ medicine.stock_quantity|floatformat:"-2" }}</span>
-              <span class="text-muted small">{{ medicine.unit }}</span>
-            </td>
-            <td class="text-end" data-label="Cost">
-              <span class="fw-medium">₱{{ medicine.unit_cost|floatformat:2 }}</span>
-              <span class="text-muted small">/ {{ medicine.unit }}</span>
-              <div class="text-muted small">Value ₱{{ medicine.total_value|floatformat:2 }}</div>
+              <div class="dh-stock-cell">
+                <span class="dh-stock-top">
+                  <span class="fw-medium">{{ medicine.stock_quantity|floatformat:"-2" }}</span>
+                  <span class="text-muted small">{{ medicine.unit }}</span>
+                </span>
+                <span class="dh-stock-bar" role="img"
+                      aria-label="{{ medicine.stock_quantity|floatformat:'-2' }} {{ medicine.unit }} in stock">
+                  <span class="dh-stock-bar-fill{% if medicine.stock_status == 'low' %} is-warning{% elif medicine.stock_status == 'out' %} is-danger{% endif %}"
+                        style="width: {{ medicine.stock_level_percent }}%"></span>
+                </span>
+              </div>
             </td>
             <td data-label="Expiry">
               {% if medicine.expiration_date %}
@@ -295,7 +290,6 @@
                         data-id="{{ medicine.id }}"
                         data-name="{{ medicine.name }}"
                         data-unit="{{ medicine.unit }}"
-                        data-cost="{{ medicine.unit_cost|floatformat:'-2' }}"
                         title="Restock"
                         aria-label="Restock {{ medicine.name }}">
                   <i class="fas fa-plus text-success"></i>
@@ -311,7 +305,6 @@
                         data-unit="{{ medicine.unit }}"
                         data-stock="{{ medicine.stock_quantity|floatformat:'-2' }}"
                         data-threshold="{{ medicine.low_stock_threshold|floatformat:'-2' }}"
-                        data-cost="{{ medicine.unit_cost|floatformat:'-2' }}"
                         data-expiration="{{ medicine.expiration_date|date:'Y-m-d' }}"
                         data-notes="{{ medicine.notes|default:'' }}"
                         title="Edit"
@@ -332,7 +325,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7">
+            <td colspan="6">
               <div class="empty py-5">
                 <div class="empty-icon">
                   <i class="fas fa-prescription-bottle-medical"></i>
@@ -463,21 +456,16 @@
             <div class="dh-form-tab-pane" id="medicineTabStock" data-form-tab-pane role="tabpanel" aria-labelledby="medicineTabStockBtn" aria-hidden="true" hidden>
               <div class="dh-form-section-title mb-3">Stock &amp; expiry tracking</div>
               <div class="row g-4 dh-form-grid">
-                <div class="col-md-3">
+                <div class="col-md-4">
                   <label class="form-label required">Stock on hand</label>
                   <input type="number" name="stock_quantity" id="medicine_stock" class="form-control" min="0" step="0.01" value="0" required>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                   <label class="form-label">Low stock alert at</label>
                   <input type="number" name="low_stock_threshold" id="medicine_threshold" class="form-control" min="0" step="0.01" value="0">
                   <small class="form-hint">Alert when stock falls to this amount.</small>
                 </div>
-                <div class="col-md-3">
-                  <label class="form-label">Cost per unit (₱)</label>
-                  <input type="number" name="unit_cost" id="medicine_cost" class="form-control" min="0" step="0.01" value="0">
-                  <small class="form-hint">Price paid for each unit of stock.</small>
-                </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                   <label class="form-label">Expiration date</label>
                   <input type="date" name="expiration_date" id="medicine_expiration" class="form-control">
                 </div>
@@ -590,7 +578,6 @@
     document.getElementById('medicine_unit').value = 'ml';
     document.getElementById('medicine_stock').value = '0';
     document.getElementById('medicine_threshold').value = '0';
-    document.getElementById('medicine_cost').value = '0';
     document.getElementById('medicineModalTitle').textContent = 'Add medicine';
     document.getElementById('medicineSubmitBtn').textContent = 'Save medicine';
     clearError(medicineErrorBox);
@@ -609,7 +596,6 @@
     document.getElementById('medicine_unit').value = button.dataset.unit || 'ml';
     document.getElementById('medicine_stock').value = button.dataset.stock || '0';
     document.getElementById('medicine_threshold').value = button.dataset.threshold || '0';
-    document.getElementById('medicine_cost').value = button.dataset.cost || '0';
     document.getElementById('medicine_expiration').value = button.dataset.expiration || '';
     document.getElementById('medicine_notes').value = button.dataset.notes || '';
   });

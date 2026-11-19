@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
     <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
     <meta name="theme-color" content="#12142c"/>
-    <title>{% block title %}FlockCare{% endblock %} | Gamefowl Management &amp; Monitoring System</title>
+    <title>{% block title %}FlockCare{% endblock %} | Management &amp; Monitoring System</title>
     <link href="{% static 'css/tabler.css' %}" rel="stylesheet"/>
     <link href="{% static 'css/tabler-flags.css' %}" rel="stylesheet"/>
     <link href="{% static 'css/tabler-socials.css' %}" rel="stylesheet"/>
@@ -32,6 +32,9 @@
         {% endif %}
 
         <div class="page-wrapper">
+            {% if request.user.is_authenticated %}
+                {% include 'theme/topbar.html' %}
+            {% endif %}
             <div class="page-body">
                 <div class="container-xl">
                     <turbo-frame id="main-content" class="d-block" tabindex="-1" data-turbo-action="advance" data-current-url="{{ request.get_full_path }}">
@@ -136,6 +139,108 @@
       mainContentFrame.addEventListener("turbo:frame-render", updateActiveSidebarLink);
       window.addEventListener("popstate", updateActiveSidebarLink);
       updateActiveSidebarLink();
+    </script>
+
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var toggle = document.querySelector('[data-theme-toggle]');
+
+        function currentTheme() {
+          return root.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+        }
+
+        function syncThemeToggle() {
+          if (!toggle) return;
+          var isDark = currentTheme() === 'dark';
+          var icon = toggle.querySelector('i');
+          if (icon) icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+          var label = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+          toggle.setAttribute('aria-label', label);
+          toggle.setAttribute('title', label);
+        }
+
+        if (toggle) {
+          toggle.addEventListener('click', function () {
+            var next = currentTheme() === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-bs-theme', next);
+            try { localStorage.setItem('tabler-theme', next); } catch (error) {}
+            syncThemeToggle();
+          });
+          new MutationObserver(syncThemeToggle).observe(root, {
+            attributes: true,
+            attributeFilter: ['data-bs-theme'],
+          });
+          syncThemeToggle();
+        }
+
+        // Press "/" anywhere outside a form control to jump into flock search.
+        document.addEventListener('keydown', function (event) {
+          if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+          var active = document.activeElement;
+          var tag = (active && active.tagName) || '';
+          if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
+          if (active && active.isContentEditable) return;
+          var search = document.querySelector('[data-topbar-search]');
+          if (!search) return;
+          event.preventDefault();
+          search.focus();
+          search.select();
+        });
+
+        // Close the persistent top-bar menus once a frame navigation
+        // completes, so they never cover the page the user just opened.
+        function closeTopbarDropdowns() {
+          document.querySelectorAll('.dh-topbar [data-bs-toggle="dropdown"].show').forEach(function (toggle) {
+            if (window.bootstrap && bootstrap.Dropdown) {
+              bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
+            } else {
+              toggle.classList.remove('show');
+              var menu = toggle.parentElement && toggle.parentElement.querySelector('.dropdown-menu');
+              if (menu) menu.classList.remove('show');
+            }
+          });
+        }
+
+        // Keep the notification badge fresh after Turbo frame navigation.
+        var mainFrame = document.getElementById('main-content');
+        var alertsFrame = document.getElementById('topbar-alerts');
+        if (mainFrame && alertsFrame) {
+          mainFrame.addEventListener('turbo:frame-render', function () {
+            if (typeof alertsFrame.reload === 'function') alertsFrame.reload();
+          });
+        }
+        if (mainFrame) {
+          mainFrame.addEventListener('turbo:frame-render', closeTopbarDropdowns);
+        }
+
+        // Deep links such as "?add=medicine" open the matching quick form.
+        function openQuickFormFromUrl() {
+          var url = new URL(window.location.href);
+          var add = url.searchParams.get('add');
+          if (!add) return;
+          var targets = {
+            flock: 'quickMemberFormCollapse',
+            health: 'quickHealthFormCollapse',
+            medicine: 'quickMedicineFormCollapse',
+            breeding: 'quickPenFormCollapse',
+          };
+          var target = document.getElementById(targets[add]);
+          if (target && window.bootstrap) {
+            bootstrap.Collapse.getOrCreateInstance(target, { toggle: false }).show();
+            window.setTimeout(function () {
+              target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 180);
+          }
+          url.searchParams.delete('add');
+          window.history.replaceState({}, '', url);
+        }
+
+        window.addEventListener('DOMContentLoaded', openQuickFormFromUrl);
+        if (mainFrame) {
+          mainFrame.addEventListener('turbo:frame-render', openQuickFormFromUrl);
+        }
+      })();
     </script>
   </body>
 </html>

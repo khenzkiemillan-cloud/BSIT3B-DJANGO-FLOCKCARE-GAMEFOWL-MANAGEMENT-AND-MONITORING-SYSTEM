@@ -20,7 +20,7 @@ class FlockMemberAdmin(admin.ModelAdmin):
 
 @admin.register(Medicine)
 class MedicineAdmin(admin.ModelAdmin):
-    list_display = ('name', 'item_type', 'category', 'stock_quantity', 'unit', 'unit_cost', 'low_stock_threshold', 'expiration_date', 'user')
+    list_display = ('name', 'item_type', 'category', 'stock_quantity', 'unit', 'low_stock_threshold', 'expiration_date', 'user')
     list_filter = ('item_type', 'category', 'unit')
     search_fields = ('name', 'notes')
 

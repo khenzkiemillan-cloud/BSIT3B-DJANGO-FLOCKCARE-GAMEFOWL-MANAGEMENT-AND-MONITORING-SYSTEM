@@ -381,21 +381,7 @@ class Command(BaseCommand):
                 },
             ]
 
-            medicine_costs = {
-                'Newcastle Disease Vaccine (LaSota Strain)': Decimal('1.20'),
-                'Fowl Pox Vaccine with Diluent': Decimal('2.00'),
-                'Ivermectin 1% Injectable Solution': Decimal('4.50'),
-                'Albendazole Oral Suspension (Dewormer)': Decimal('6.00'),
-                'Belamyl B-Complex + Liver Extract (B12)': Decimal('3.00'),
-                'Enrofloxacin 10% Oral Solution': Decimal('8.00'),
-                'Amoxicillin Trihydrate 20% Water Soluble Powder': Decimal('2.50'),
-                'Reload Plus Oral Energy Drops': Decimal('12.00'),
-                'Terramycin Aerosol Wound Spray (Gentian Violet)': Decimal('1.75'),
-                'Ketoprofen Anti-inflammatory Solution': Decimal('5.50'),
-            }
-
             for m_cfg in medicines_data:
-                m_cfg['unit_cost'] = medicine_costs.get(m_cfg['name'], Decimal('0.00'))
                 Medicine.objects.update_or_create(
                     user=user,
                     name=m_cfg['name'],

@@ -112,10 +112,6 @@ class Medicine(models.Model):
     unit = models.CharField(max_length=30, default='pcs')
     stock_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     low_stock_threshold = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    unit_cost = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, blank=True,
-        help_text='Cost / price per unit in Philippine pesos (₱).',
-    )
     expiration_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -130,14 +126,47 @@ class Medicine(models.Model):
     def __str__(self):
         return f"{self.name} ({self.stock_quantity} {self.unit})"
 
-    @property
-    def total_value(self):
-        """Current stock value based on the per-unit cost."""
-        return (self.stock_quantity or 0) * (self.unit_cost or 0)
+    CATEGORY_ICONS = {
+        'Vaccine': 'fa-syringe',
+        'Dewormer': 'fa-bug-slash',
+        'Vitamin': 'fa-capsules',
+        'Antibiotic': 'fa-pills',
+        'Treatment': 'fa-kit-medical',
+        'Other': 'fa-prescription-bottle-medical',
+    }
 
     @property
     def type_display(self):
         return dict(self.ITEM_TYPE_CHOICES).get(self.item_type, 'Medicine')
+
+    @property
+    def category_icon(self):
+        """Font Awesome icon that matches the cabinet category."""
+        return self.CATEGORY_ICONS.get(self.category, 'fa-prescription-bottle-medical')
+
+    @property
+    def stock_status(self):
+        """Return ``ok``, ``low`` or ``out`` for stock-level styling."""
+        stock = self.stock_quantity or 0
+        if stock <= 0:
+            return 'out'
+        if stock <= (self.low_stock_threshold or 0):
+            return 'low'
+        return 'ok'
+
+    @property
+    def stock_level_percent(self):
+        """Fill level for the stock meter, scaled to 4x the alert threshold.
+
+        The bar reaches full only when stock is at least four times the
+        low-stock alert level, which keeps low supplies visually obvious.
+        """
+        stock = float(self.stock_quantity or 0)
+        if stock <= 0:
+            return 0
+        threshold = float(self.low_stock_threshold or 0)
+        scale = max(threshold * 4, stock, 1)
+        return max(4, min(100, round(stock / scale * 100)))
 
 
 # Model alias for clean domain naming

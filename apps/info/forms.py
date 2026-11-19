@@ -141,7 +141,6 @@ class MedicineForm(forms.ModelForm):
         for optional_field in [
             'item_type',
             'low_stock_threshold',
-            'unit_cost',
             'expiration_date',
             'notes',
         ]:
@@ -157,7 +156,6 @@ class MedicineForm(forms.ModelForm):
             'unit',
             'stock_quantity',
             'low_stock_threshold',
-            'unit_cost',
             'expiration_date',
             'notes',
         ]
@@ -165,7 +163,6 @@ class MedicineForm(forms.ModelForm):
             'expiration_date': forms.DateInput(attrs={'type': 'date'}),
             'stock_quantity': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
             'low_stock_threshold': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
-            'unit_cost': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
         }
 
     def clean_name(self):
@@ -200,14 +197,6 @@ class MedicineForm(forms.ModelForm):
         if threshold < 0:
             raise forms.ValidationError('Low stock threshold cannot be negative.')
         return threshold
-
-    def clean_unit_cost(self):
-        unit_cost = self.cleaned_data.get('unit_cost')
-        if unit_cost is None:
-            return Decimal('0.00')
-        if unit_cost < 0:
-            raise forms.ValidationError('Cost / price per unit cannot be negative.')
-        return unit_cost
 
 
 InventoryItemForm = MedicineForm

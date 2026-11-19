@@ -5,7 +5,7 @@ from functools import wraps
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, DecimalField, F, Q, Sum
+from django.db.models import Count, F, Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -745,10 +745,6 @@ def medicine_list_page(request):
             expiration_date__lte=expiry_cutoff,
         )),
         expired=Count('id', filter=Q(expiration_date__lt=today)),
-        inventory_value=Sum(
-            F('stock_quantity') * F('unit_cost'),
-            output_field=DecimalField(max_digits=14, decimal_places=2),
-        ),
     )
 
     if query:
@@ -794,7 +790,6 @@ def medicine_list_page(request):
         'state': state,
         'category': category,
         'counts': counts,
-        'inventory_value': counts.get('inventory_value') or 0,
         'today': today,
         'expiry_cutoff': expiry_cutoff,
         'expiry_window_days': MEDICINE_EXPIRY_WINDOW_DAYS,

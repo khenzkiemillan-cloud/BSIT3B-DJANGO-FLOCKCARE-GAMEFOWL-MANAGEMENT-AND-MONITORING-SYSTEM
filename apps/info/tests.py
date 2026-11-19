@@ -693,6 +693,13 @@ class MedicineCabinetTests(FlockTestCase):
         self.assertContains(response, 'Newcastle vaccine')
         self.assertContains(response, 'Dewormer syrup')
 
+    def test_medicine_page_does_not_render_cost_fields(self):
+        response = self.client.get(reverse('info:medicine_list'))
+
+        self.assertNotContains(response, 'unit_cost')
+        self.assertNotContains(response, 'Unit cost')
+        self.assertNotContains(response, 'Total value')
+
     def test_medicine_page_filters_low_stock(self):
         response = self.client.get(reverse('info:medicine_list'), {'state': 'low'})
 
@@ -999,7 +1006,9 @@ class InlineQuickFormRenderTests(FlockTestCase):
         # after </turbo-frame> never run when the page is opened from the sidebar.
         save_url_position = html.index(reverse('info:breeding_pen_save_ajax'))
         self.assertLess(html.index('id="quickPenForm"'), save_url_position)
-        self.assertLess(save_url_position, html.index('</turbo-frame>'))
+        main_frame_start = html.index('id="main-content"')
+        main_frame_close = html.index('</turbo-frame>', main_frame_start)
+        self.assertLess(save_url_position, main_frame_close)
 
     def test_health_page_renders_quick_health_form(self):
         response = self.client.get(reverse('info:health_list'))

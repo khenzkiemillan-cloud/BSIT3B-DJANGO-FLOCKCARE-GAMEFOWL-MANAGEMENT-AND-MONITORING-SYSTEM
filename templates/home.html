@@ -10,7 +10,7 @@
         </div>
         <h2 class="dh-hero-title">Welcome back, {{ user.get_full_name|default:user.username }}</h2>
         <p class="dh-hero-sub mb-0">
-          Track your gamefowl flock, health schedule and performance at a glance.
+          Track your flock, health schedule and supplies at a glance.
         </p>
         <div class="dh-hero-stats">
           <span class="dh-hero-stat"><span class="dh-status-dot"></span><strong>{{ active_birds }}</strong> active</span>
@@ -21,9 +21,15 @@
           {% endif %}
         </div>
       </div>
-      <div class="btn-list">
-        <a href="{% url 'info:info_list' %}" class="btn btn-accent">
-          <i class="fas fa-dove me-2"></i>Manage flock
+      <div class="btn-list flex-wrap">
+        <a href="{% url 'info:info_list' %}?add=flock" class="btn btn-accent">
+          <i class="fas fa-plus me-2"></i>Add bird
+        </a>
+        <a href="{% url 'info:health_list' %}?add=health" class="btn btn-outline-light">
+          <i class="fas fa-heart-pulse me-2"></i>Log health
+        </a>
+        <a href="{% url 'info:medicine_list' %}?add=medicine" class="btn btn-outline-light d-none d-sm-inline-flex">
+          <i class="fas fa-prescription-bottle-medical me-2"></i>Add medicine
         </a>
       </div>
     </div>
@@ -31,20 +37,20 @@
 
   <div class="dh-dashboard-stack">
 
-  {% if medicine_alert_count %}
+  {% if inventory_alert_count %}
   <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2" role="alert">
     <i class="fas fa-prescription-bottle-medical" aria-hidden="true"></i>
     <span>
-      <strong>{{ medicine_alert_count }}</strong> medicine{{ medicine_alert_count|pluralize }} need{{ medicine_alert_count|pluralize }}
-      attention — low stock or nearing expiry.
+      <strong>{{ inventory_alert_count }}</strong> inventory item{{ inventory_alert_count|pluralize }} need{{ inventory_alert_count|pluralize:"s," }}
+      attention — low stock, out of stock, or expiry issues.
     </span>
     <a href="{% url 'info:medicine_list' %}" class="alert-link ms-auto">Open medicine cabinet</a>
   </div>
   {% endif %}
 
   <div class="row row-cards g-4">
-    <div class="col-sm-6">
-      <div class="card stat-card stat-card-primary text-white">
+    <div class="col-sm-6 col-xl-3">
+      <div class="card stat-card stat-card-primary text-white h-100">
         <div class="card-body">
           <div class="d-flex align-items-center justify-content-between">
             <div>
@@ -60,8 +66,8 @@
         </div>
       </div>
     </div>
-    <div class="col-sm-6">
-      <div class="card stat-card stat-card-success text-white">
+    <div class="col-sm-6 col-xl-3">
+      <div class="card stat-card stat-card-success text-white h-100">
         <div class="card-body">
           <div class="d-flex align-items-center justify-content-between">
             <div>
@@ -73,6 +79,48 @@
               </div>
             </div>
             <span class="stat-card-icon"><i class="fas fa-heart-pulse"></i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="card stat-card {% if overdue_count %}stat-card-warning{% else %}stat-card-info{% endif %} text-white h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <div class="h2 mb-1">{{ overdue_count }}</div>
+              <div class="tracking-wide text-white-50">Overdue health</div>
+              <div class="dh-stat-meta">
+                <i class="far fa-clock"></i>
+                {% if overdue_count %}
+                Needs follow-up now
+                {% else %}
+                {{ upcoming_count }} due in 30 days
+                {% endif %}
+              </div>
+            </div>
+            <span class="stat-card-icon"><i class="fas fa-notes-medical"></i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="card stat-card {% if inventory_alert_count %}stat-card-warning{% else %}stat-card-info{% endif %} text-white h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <div class="h2 mb-1">{{ inventory_alert_count }}</div>
+              <div class="tracking-wide text-white-50">Inventory alerts</div>
+              <div class="dh-stat-meta">
+                <i class="fas fa-boxes-stacked"></i>
+                {% if inventory_alert_count %}
+                {{ inventory_low_stock }} low · {{ inventory_out_of_stock }} out · {{ inventory_expiring }} expiring · {{ inventory_expired }} expired
+                {% else %}
+                {{ inventory_total_items }} item{{ inventory_total_items|pluralize }} tracked
+                {% endif %}
+              </div>
+            </div>
+            <span class="stat-card-icon"><i class="fas fa-box-open"></i></span>
           </div>
         </div>
       </div>
@@ -97,7 +145,7 @@
                 <th>Breed</th>
                 <th>Gender</th>
                 <th>Status</th>
-                <th class="text-end">Record</th>
+                <th class="text-end">Cage</th>
               </tr>
             </thead>
             <tbody>
@@ -120,9 +168,7 @@
                   <span class="dh-status is-info"><span class="dh-status-dot"></span>{{ bird.status }}</span>
                   {% endif %}
                 </td>
-                <td class="text-end" data-label="Record">
-                  <span class="text-muted">—</span>
-                </td>
+                <td class="text-end text-muted" data-label="Cage">{{ bird.cage_number|default:"—" }}</td>
               </tr>
               {% empty %}
               <tr>
@@ -131,6 +177,11 @@
                     <div class="empty-icon"><i class="fas fa-dove"></i></div>
                     <p class="empty-title">No flock members yet</p>
                     <p class="empty-subtitle">Birds you add from the Flock page will appear here.</p>
+                    <div class="empty-action">
+                      <a href="{% url 'info:info_list' %}?add=flock" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Add your first bird
+                      </a>
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -184,6 +235,11 @@
               <div class="empty-icon"><i class="fas fa-calendar-check"></i></div>
               <p class="empty-title">No upcoming health tasks</p>
               <p class="empty-subtitle">Vaccinations and treatments due in the next 30 days will appear here.</p>
+              <div class="empty-action">
+                <a href="{% url 'info:health_list' %}?add=health" class="btn btn-outline-primary">
+                  <i class="fas fa-plus me-2"></i>Log a health record
+                </a>
+              </div>
             </div>
           </div>
           {% endif %}
@@ -193,7 +249,7 @@
   </div>
 
   <div class="row row-cards g-4">
-    <div class="col-lg-3">
+    <div class="col-lg-4">
       <div class="card dh-summary-card h-100">
         <div class="card-header">
           <h3 class="card-title mb-0">Flock composition</h3>
@@ -231,8 +287,66 @@
       </div>
     </div>
 
+    <div class="col-lg-4">
+      <div class="card dh-summary-card h-100">
+        <div class="card-header d-flex align-items-center">
+          <h3 class="card-title mb-0">Inventory overview</h3>
+          {% if inventory_alert_count %}
+          <span class="badge bg-warning-lt text-warning ms-auto">{{ inventory_alert_count }} alert{{ inventory_alert_count|pluralize }}</span>
+          {% else %}
+          <span class="badge bg-success-lt text-success ms-auto">Healthy</span>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          <div class="dh-inventory-grid">
+            <a class="dh-inventory-tile" href="{% url 'info:medicine_list' %}">
+              <span class="dh-inventory-tile-icon is-primary"><i class="fas fa-prescription-bottle-medical"></i></span>
+              <span class="min-w-0">
+                <span class="dh-inventory-tile-count">{{ inventory_total_items }}</span>
+                <span class="dh-inventory-tile-label">Cabinet items</span>
+              </span>
+            </a>
+            <a class="dh-inventory-tile" href="{% url 'info:medicine_list' %}?state=low">
+              <span class="dh-inventory-tile-icon is-warning"><i class="fas fa-box-open"></i></span>
+              <span class="min-w-0">
+                <span class="dh-inventory-tile-count">{{ inventory_low_stock }}</span>
+                <span class="dh-inventory-tile-label">Low stock</span>
+              </span>
+            </a>
+            <a class="dh-inventory-tile" href="{% url 'info:medicine_list' %}?state=expiring">
+              <span class="dh-inventory-tile-icon is-info"><i class="fas fa-hourglass-half"></i></span>
+              <span class="min-w-0">
+                <span class="dh-inventory-tile-count">{{ inventory_expiring }}</span>
+                <span class="dh-inventory-tile-label">Expiring soon</span>
+              </span>
+            </a>
+            <a class="dh-inventory-tile" href="{% url 'info:medicine_list' %}?state=expired">
+              <span class="dh-inventory-tile-icon is-danger"><i class="fas fa-triangle-exclamation"></i></span>
+              <span class="min-w-0">
+                <span class="dh-inventory-tile-count">{{ inventory_expired }}</span>
+                <span class="dh-inventory-tile-label">Expired</span>
+              </span>
+            </a>
+          </div>
+          {% if inventory_alert_count %}
+          <div class="dh-inventory-note is-warning">
+            <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+            <span>
+              {{ inventory_alert_count }} item{{ inventory_alert_count|pluralize }} need{{ inventory_alert_count|pluralize:"s," }} attention{% if inventory_out_of_stock %} · {{ inventory_out_of_stock }} out of stock{% endif %}{% if inventory_expired %} · {{ inventory_expired }} expired{% endif %}.
+            </span>
+            <a href="{% url 'info:medicine_list' %}" class="ms-auto fw-semibold text-decoration-none">Review</a>
+          </div>
+          {% else %}
+          <div class="dh-inventory-note is-ok">
+            <i class="fas fa-circle-check" aria-hidden="true"></i>
+            <span>No stock or expiry issues right now.</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
 
-    <div class="col-lg-3">
+    <div class="col-lg-4">
       <div class="card h-100 dh-card-secondary dh-summary-card">
         <div class="card-header">
           <h3 class="card-title mb-0">Quick actions</h3>
@@ -246,6 +360,10 @@
             <a href="{% url 'info:health_list' %}" class="dh-quick-action">
               <i class="fas fa-heart-pulse"></i>
               <span>Health schedule</span>
+            </a>
+            <a href="{% url 'info:breeding_list' %}" class="dh-quick-action">
+              <i class="fas fa-egg"></i>
+              <span>Breeding pens</span>
             </a>
             <a href="{% url 'info:medicine_list' %}" class="dh-quick-action">
               <i class="fas fa-prescription-bottle-medical"></i>

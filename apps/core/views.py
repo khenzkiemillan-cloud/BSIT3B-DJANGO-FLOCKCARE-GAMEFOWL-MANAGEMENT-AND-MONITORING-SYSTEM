@@ -6,12 +6,13 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.db.models import Count, DecimalField, F, Q, Sum
+from django.db.models import Count, F, Q
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
+from apps.core.navigation import get_navigation_alerts
 from apps.core.scoping import scoped_flock_members
 from apps.info.models import HealthRecord, Medicine
 
@@ -210,14 +211,16 @@ def home(request):
         feed_items=Count('id', filter=Q(item_type='feed')),
         equipment_items=Count('id', filter=Q(item_type='equipment')),
         supply_items=Count('id', filter=Q(item_type='supply')),
-        total_val=Sum(
-            F('stock_quantity') * F('unit_cost'),
-            output_field=DecimalField(max_digits=14, decimal_places=2),
-        ),
         low_stock_count=Count('id', filter=Q(
             stock_quantity__gt=0,
             stock_quantity__lte=F('low_stock_threshold'),
         )),
+        out_of_stock_count=Count('id', filter=Q(stock_quantity__lte=0)),
+        expiring_count=Count('id', filter=Q(
+            expiration_date__gte=today,
+            expiration_date__lte=medicine_expiry_cutoff,
+        )),
+        expired_count=Count('id', filter=Q(expiration_date__lt=today)),
     )
     inventory_alert_count = inventory_items.filter(
         Q(stock_quantity__lte=F('low_stock_threshold')) |
@@ -246,8 +249,10 @@ def home(request):
         'inventory_feed_count': inventory_stats['feed_items'] or 0,
         'inventory_equipment_count': inventory_stats['equipment_items'] or 0,
         'inventory_supply_count': inventory_stats['supply_items'] or 0,
-        'inventory_total_value': inventory_stats['total_val'] or 0,
         'inventory_low_stock': inventory_stats['low_stock_count'] or 0,
+        'inventory_out_of_stock': inventory_stats['out_of_stock_count'] or 0,
+        'inventory_expiring': inventory_stats['expiring_count'] or 0,
+        'inventory_expired': inventory_stats['expired_count'] or 0,
         'today': today,
     }
     return render(request, 'home.html', context)
@@ -289,3 +294,13 @@ def register_view(request):
     )
     login(request, user)
     return redirect(next_url or 'dashboard')
+
+
+@login_required(login_url='login')
+def nav_alerts_view(request):
+    """Render the top-bar notification panel for a Turbo frame refresh."""
+    return render(
+        request,
+        'theme/partials/topbar_alerts.html',
+        get_navigation_alerts(request.user),
+    )

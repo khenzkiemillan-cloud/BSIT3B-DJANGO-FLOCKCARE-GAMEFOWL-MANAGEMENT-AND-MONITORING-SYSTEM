@@ -1,0 +1,103 @@
+{% with alerts=nav_alerts %}
+<turbo-frame id="topbar-alerts">
+<div class="dropdown">
+  <button class="btn btn-icon btn-ghost-secondary dh-icon-btn dh-alert-button"
+          type="button"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+          aria-label="{% if alerts.total %}{{ alerts.total }} alert{{ alerts.total|pluralize }} need{{ alerts.total|pluralize:"s," }} attention{% else %}No alerts{% endif %}">
+    <i class="far fa-bell" aria-hidden="true"></i>
+    {% if alerts.total %}
+    <span class="dh-alert-dot">{{ alerts.total }}</span>
+    {% endif %}
+  </button>
+
+  <div class="dropdown-menu dropdown-menu-end dh-alerts-menu">
+    <div class="dh-alerts-head">
+      <span>Needs attention</span>
+      {% if alerts.total %}
+      <span class="dh-alerts-total">{{ alerts.total }}</span>
+      {% endif %}
+    </div>
+
+    {% if alerts.overdue_records %}
+    <div class="dh-alerts-group-title">Overdue health tasks</div>
+    {% for record in alerts.overdue_records %}
+    <a class="dropdown-item dh-alert-item" href="{% url 'info:health_list' %}?state=overdue" data-turbo-frame="main-content">
+      <span class="dh-alert-icon is-danger"><i class="fas fa-triangle-exclamation"></i></span>
+      <span class="min-w-0">
+        <strong>{{ record.title }}</strong>
+        <small>{{ record.bird.tag_number }} · due {{ record.next_due_date|date:"M j, Y" }}</small>
+      </span>
+    </a>
+    {% endfor %}
+    {% endif %}
+
+    {% if alerts.due_soon_records %}
+    <div class="dh-alerts-group-title">Due soon</div>
+    {% for record in alerts.due_soon_records %}
+    <a class="dropdown-item dh-alert-item" href="{% url 'info:health_list' %}?state=upcoming" data-turbo-frame="main-content">
+      <span class="dh-alert-icon is-warning"><i class="fas fa-calendar-day"></i></span>
+      <span class="min-w-0">
+        <strong>{{ record.title }}</strong>
+        <small>{{ record.bird.tag_number }} · due {{ record.next_due_date|date:"M j, Y" }}</small>
+      </span>
+    </a>
+    {% endfor %}
+    {% endif %}
+
+    {% if alerts.low_stock_items %}
+    <div class="dh-alerts-group-title">Low stock</div>
+    {% for item in alerts.low_stock_items %}
+    <a class="dropdown-item dh-alert-item" href="{% url 'info:medicine_list' %}?state=low" data-turbo-frame="main-content">
+      <span class="dh-alert-icon is-info"><i class="fas fa-box-open"></i></span>
+      <span class="min-w-0">
+        <strong>{{ item.name }}</strong>
+        <small>{{ item.stock_quantity|floatformat:"-2" }} {{ item.unit }} left · alert at {{ item.low_stock_threshold|floatformat:"-2" }}</small>
+      </span>
+    </a>
+    {% endfor %}
+    {% endif %}
+
+    {% if alerts.expiring_items %}
+    <div class="dh-alerts-group-title">Nearing expiry</div>
+    {% for item in alerts.expiring_items %}
+    <a class="dropdown-item dh-alert-item" href="{% url 'info:medicine_list' %}?state=expiring" data-turbo-frame="main-content">
+      <span class="dh-alert-icon is-warning"><i class="fas fa-hourglass-half"></i></span>
+      <span class="min-w-0">
+        <strong>{{ item.name }}</strong>
+        <small>Expires {{ item.expiration_date|date:"M j, Y" }}</small>
+      </span>
+    </a>
+    {% endfor %}
+    {% endif %}
+
+    {% if alerts.expired_items %}
+    <div class="dh-alerts-group-title">Expired</div>
+    {% for item in alerts.expired_items %}
+    <a class="dropdown-item dh-alert-item" href="{% url 'info:medicine_list' %}?state=expired" data-turbo-frame="main-content">
+      <span class="dh-alert-icon is-danger"><i class="fas fa-triangle-exclamation"></i></span>
+      <span class="min-w-0">
+        <strong>{{ item.name }}</strong>
+        <small>Expired {{ item.expiration_date|date:"M j, Y" }}</small>
+      </span>
+    </a>
+    {% endfor %}
+    {% endif %}
+
+    {% if alerts.total %}
+    <div class="dh-alerts-footer">
+      <a href="{% url 'info:health_list' %}" data-turbo-frame="main-content">Health schedule</a>
+      <a href="{% url 'info:medicine_list' %}" data-turbo-frame="main-content">Medicine cabinet</a>
+    </div>
+    {% else %}
+    <div class="dh-alerts-empty">
+      <i class="fas fa-circle-check" aria-hidden="true"></i>
+      <strong>You're all caught up</strong>
+      <span>No overdue tasks, low stock, or expiry issues.</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+</turbo-frame>
+{% endwith %}

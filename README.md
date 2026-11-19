@@ -119,7 +119,7 @@ Specifically, the project aims to accomplish the following technical objectives:
 -Develop a centralized flock profiling module that records individual bird identifiers (wingband or legband tags), bloodline breeds, gender classifications (Stag, Cock, Broodcock, Broodhen, Pullet, Hen), status categories (Active, Broodcock, Broodhen, Retired, Sold), and win-loss-draw performance records.
 -Implement a health care scheduling and automated reminder module that logs vaccinations, deworming, vitamins, and treatments while flagging overdue and upcoming due-within-30-days follow-ups.
 -Integrate a breeding management module to monitor pairings, clutch and hatch records, and lineage across the flock, together with per-bird weight and performance logs.
--Develop a medicine cabinet inventory module with category filtering, stock level alerts (Low Stock, Out of Stock), expiration tracking (Expiring in 30 Days, Expired), and per-unit cost so the total cabinet value is visible.
+-Develop a medicine cabinet inventory module with category filtering, stock level alerts (Low Stock, Out of Stock), expiration tracking (Expiring in 30 Days, Expired), and visual stock-level meters for quick restocking decisions.
 - Build an analytics dashboard summarizing total flock population, active birds, performance records, medicine inventory, and overdue health alerts, and conduct user acceptance testing (UAT) with breeders and farm handlers to evaluate usability and system performance.
 
 Significance of the Project

@@ -1,0 +1,116 @@
+{% load static %}
+<header class="dh-topbar d-print-none" aria-label="Workspace toolbar">
+  <div class="container-xl">
+    <div class="dh-topbar-inner">
+      <div class="dh-topbar-main">
+        <div class="dh-topbar-context">
+          <span class="dh-topbar-eyebrow">Workspace</span>
+          <span class="dh-topbar-date">
+            <i class="far fa-calendar-days" aria-hidden="true"></i>{% now "l, F j, Y" %}
+          </span>
+        </div>
+
+        <form class="dh-topbar-search" method="get" action="{% url 'info:info_list' %}" role="search" data-turbo-frame="main-content">
+          <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+          <label class="visually-hidden" for="topbarSearch">Search the flock</label>
+          <input type="search"
+                 id="topbarSearch"
+                 name="q"
+                 placeholder="Search birds by tag, breed or status…"
+                 autocomplete="off"
+                 data-topbar-search>
+          <kbd aria-hidden="true">/</kbd>
+        </form>
+      </div>
+
+      <div class="dh-topbar-actions">
+        <div class="dropdown">
+          <button class="btn btn-primary btn-sm dh-topbar-add dropdown-toggle"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false"
+                  aria-label="Quick add">
+            <i class="fas fa-plus" aria-hidden="true"></i>
+            <span class="d-none d-sm-inline">Quick add</span>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end dh-quick-menu">
+            <div class="dh-quick-menu-title">Add something new</div>
+            <a class="dropdown-item" href="{% url 'info:info_list' %}?add=flock" data-turbo-frame="main-content">
+              <span class="dh-quick-menu-icon is-primary"><i class="fas fa-dove"></i></span>
+              <span>
+                <strong>Flock member</strong>
+                <small>Register a new bird</small>
+              </span>
+            </a>
+            <a class="dropdown-item" href="{% url 'info:health_list' %}?add=health" data-turbo-frame="main-content">
+              <span class="dh-quick-menu-icon is-success"><i class="fas fa-heart-pulse"></i></span>
+              <span>
+                <strong>Health record</strong>
+                <small>Log a vaccine or treatment</small>
+              </span>
+            </a>
+            <a class="dropdown-item" href="{% url 'info:medicine_list' %}?add=medicine" data-turbo-frame="main-content">
+              <span class="dh-quick-menu-icon is-info"><i class="fas fa-prescription-bottle-medical"></i></span>
+              <span>
+                <strong>Cabinet item</strong>
+                <small>Add medicine or supplies</small>
+              </span>
+            </a>
+            <a class="dropdown-item" href="{% url 'info:breeding_list' %}?add=breeding" data-turbo-frame="main-content">
+              <span class="dh-quick-menu-icon is-warning"><i class="fas fa-egg"></i></span>
+              <span>
+                <strong>Breeding pen</strong>
+                <small>Pair a cock and hen</small>
+              </span>
+            </a>
+          </div>
+        </div>
+
+        <turbo-frame id="topbar-alerts" src="{% url 'nav_alerts' %}" class="dh-topbar-alerts-frame">
+          <span class="dh-topbar-alert-loading" aria-label="Loading alerts">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+          </span>
+        </turbo-frame>
+
+        <button type="button"
+                class="btn btn-icon btn-ghost-secondary dh-icon-btn dh-theme-toggle"
+                data-theme-toggle
+                aria-label="Switch to dark mode"
+                title="Switch to dark mode">
+          <i class="fas fa-moon" aria-hidden="true"></i>
+        </button>
+
+        <div class="dropdown">
+          <button class="dh-topbar-user" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="dh-avatar dh-avatar-sm">{{ user.username|first|upper }}</span>
+            <span class="dh-topbar-user-meta d-none d-md-flex">
+              <span class="dh-user-name">{{ user.get_full_name|default:user.username }}</span>
+              <span class="dh-user-role">{% if user.is_superuser %}Administrator{% else %}Breeder{% endif %}</span>
+            </span>
+            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end dh-user-menu">
+            <div class="dh-user-menu-head">
+              <span class="dh-avatar dh-avatar-sm">{{ user.username|first|upper }}</span>
+              <span class="min-w-0">
+                <strong>{{ user.get_full_name|default:user.username }}</strong>
+                <small>{{ user.email|default:"Signed in" }}</small>
+              </span>
+            </div>
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item" href="{% url 'users:profile' %}">
+              <i class="fas fa-id-badge" aria-hidden="true"></i> Farm profile
+            </a>
+            <a class="dropdown-item" href="{% url 'dashboard' %}">
+              <i class="fas fa-gauge-high" aria-hidden="true"></i> Dashboard
+            </a>
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item is-danger" href="{% url 'logout' %}">
+              <i class="fas fa-right-from-bracket" aria-hidden="true"></i> Sign out
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
